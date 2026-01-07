@@ -20,9 +20,9 @@ WELCOME_MESSAGE = """
 ### 📌 Supported Syntax Highlight:
 >Python, JSON, Markdown, YAML, TOML, Rust,  
 >
->HTML, CSS, XML, SQL, JavaScript, Java,  
+>HTML, CSS, XML, SQL, JavaScript, TypeScript, 
 >
->Bash, and Go.
+>Java, Bash, and Go.
 """
 
 EXCEPTION_TAB_IDS = ("key-mappings", "welcome", "cat-me")
@@ -44,7 +44,8 @@ EDITOR_THEMES = sorted(
 
 # builtin languages for syntax highlighting
 text_area = TextArea()
-LANGUAGES = list(text_area.available_languages)
+LANGUAGES = list(text_area.available_languages) + ["typescript"]
+RUNNER_SUPPORTED_LANGUAGES = ["js", 'ts', "py", "java"]
 
 _CATNIP = Theme(
     name="catnip",

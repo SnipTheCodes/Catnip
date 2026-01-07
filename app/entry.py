@@ -13,12 +13,11 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal, VerticalScroll, Vertical
 from textual.widgets import Button, Static, Footer, DirectoryTree, Select, TextArea, TabbedContent, TabPane, Markdown, \
     DataTable, ContentSwitcher, Tree, RichLog, LoadingIndicator
-
 from app import runner
 from app.ai import OllamaAI
 from app.constants import WELCOME_MESSAGE, APP_THEMES, EDITOR_THEMES, CUSTOM_EDITOR_THEMES, \
     CUSTOM_APP_THEMES, EXCEPTION_TAB_IDS, LANGUAGES, WIDTH_SCALES, \
-    DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE
+    DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE, RUNNER_SUPPORTED_LANGUAGES
 from app.editor import Editor
 from app.explorer import get_dialog_handler
 from app.utils.config_parser import ConfigParser
@@ -240,7 +239,7 @@ class ChatPane(TabPane):
                 await asyncio.sleep(0)  # let UI refresh
 
         except Exception as e:
-            await text_log.mount(Static(f"❌ {e}", classes="ai-message"))
+            await text_log.mount(Static(f"{e}", classes="ai-message"))
 
 
 class CatnipApp(App):
@@ -690,8 +689,9 @@ class CatnipApp(App):
         file_ext = active_tab.id.split("-")[-1]
 
         runner_output = self.query_one("#side-panel").query_one("#runner-output", expect_type=RichLog)
-        if file_ext in ("js", "py"):
-            self.action_show_runner_panel()
+        self.action_show_runner_panel()
+        if file_ext in RUNNER_SUPPORTED_LANGUAGES:
+            self.action_save_file()
             runner_output.write(f"{runner.run_script(file_path, file_ext)}\n➜ ✗ (catnip):")
         else:
             runner_output.write("Not supported file!\n➜ ✗ (catnip):")
@@ -728,7 +728,7 @@ class CatnipApp(App):
         if active_tab:
             if active_tab.id not in EXCEPTION_TAB_IDS:
                 text_area = active_tab.query_one(TextArea)
-                text_area.language = language  # change syntax highlighting
+                text_area.language = language if language != 'typescript' else 'javascript'  # change syntax highlighting
 
     def open_file_dialog(self) -> None:
         """Open a file selection dialog and update the DirectoryTree to its parent folder."""

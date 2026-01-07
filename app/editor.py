@@ -31,4 +31,7 @@ class Editor(TextArea):
         file_extension = file_path.suffix.lower()
         lexer = get_lexer_for_filename(file_extension)
         language = lexer.__class__.__name__.replace("Lexer", "").lower()
-        return language if language in languages else "markdown"
+        if language == 'typescript':
+            return 'javascript'
+        else:
+            return language if language in languages else "markdown"
