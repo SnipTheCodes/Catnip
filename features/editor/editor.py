@@ -35,3 +35,7 @@ class Editor(TextArea):
             return 'javascript'
         else:
             return language if language in languages else "markdown"
+
+    @staticmethod
+    def normalize_language(language: str) -> str:
+        return "javascript" if language == "typescript" else language

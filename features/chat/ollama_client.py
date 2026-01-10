@@ -7,10 +7,10 @@ import time
 import psutil
 from together import Together
 
-from app.utils.config_parser import ConfigParser
+from utils.config_parser import ConfigParser
 
 
-class OllamaAI:
+class OllamaClient:
     _started_pid = None
 
     def __init__(self, model: str = "llama3"):

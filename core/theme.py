@@ -1,33 +1,8 @@
-# constants.py
-from rich.style import Style
-from textual.theme import BUILTIN_THEMES
-from textual.theme import Theme
-from textual.widgets import TextArea
-from textual.widgets.text_area import TextAreaTheme
-
-# width sizes for side panel and tabbed editor in percentages
-WIDTH_SCALES = [0, 0.25, 0.5, 1]
-DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE = WIDTH_SCALES[1]
-
-# welcome message displayed in the app
-WELCOME_MESSAGE = """
-### 😻 Purr purr, welcome to Catnip! 😻
-- **Adjust** your terminal size for better view.
-- **Hover over** a button to see its tooltip.
-- **🐳 Ctrl+2** to open a customizer panel and change the look.
-- **🐱 Ctrl+Shift+C** to start chatting with a cat.
-
-### 📌 Supported Syntax Highlight:
->Python, JSON, Markdown, YAML, TOML, Rust,  
->
->HTML, CSS, XML, SQL, JavaScript, TypeScript, 
->
->Java, Bash, and Go.
-"""
-
-EXCEPTION_TAB_IDS = ("key-mappings", "welcome", "cat-me")
-
 # available themes for the app
+from rich.style import Style
+from textual._text_area_theme import TextAreaTheme
+from textual.theme import BUILTIN_THEMES, Theme
+
 APP_THEMES = sorted(
     [("Catnip", "catnip")]
     + [(theme.replace("-", " ").title(), theme) for theme in
@@ -41,11 +16,6 @@ EDITOR_THEMES = sorted(
     + [(theme.name.replace("_", " ").title(), theme.name) for theme in
        TextAreaTheme.builtin_themes()],
     key=lambda x: x[0])
-
-# builtin languages for syntax highlighting
-text_area = TextArea()
-LANGUAGES = list(text_area.available_languages) + ["typescript"]
-RUNNER_SUPPORTED_LANGUAGES = ["js", 'ts', "py", "java"]
 
 _CATNIP = Theme(
     name="catnip",

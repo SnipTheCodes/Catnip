@@ -42,3 +42,9 @@ class ConfigParser:
         """Save the config to the file."""
         with open(cls.CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=4)
+
+    @classmethod
+    def update_config_file(cls, field: str, value: str) -> None:
+        config = cls.load_config()
+        config[field] = value
+        cls.save_config(config)
