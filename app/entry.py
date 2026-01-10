@@ -1,249 +1,36 @@
-import asyncio
 import random
-import re
-import shutil
-from datetime import datetime
 from pathlib import Path
-from typing import Union, cast
+from typing import Optional
 
-from rich.text import Text
-from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, VerticalScroll, Vertical
-from textual.widgets import Button, Static, Footer, DirectoryTree, Select, TextArea, TabbedContent, TabPane, Markdown, \
-    DataTable, ContentSwitcher, Tree, RichLog, LoadingIndicator
-from app import runner
-from app.ai import OllamaAI
-from app.constants import WELCOME_MESSAGE, APP_THEMES, EDITOR_THEMES, CUSTOM_EDITOR_THEMES, \
-    CUSTOM_APP_THEMES, EXCEPTION_TAB_IDS, LANGUAGES, WIDTH_SCALES, \
-    DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE, RUNNER_SUPPORTED_LANGUAGES
-from app.editor import Editor
-from app.explorer import get_dialog_handler
-from app.utils.config_parser import ConfigParser
-from app.utils.screen import DEFAULT_LEFT_PANEL_WIDTH, get_side_panel_width, get_tabbed_editor_width, \
+from textual.widgets import Button, Footer, Select, TextArea, TabbedContent, TabPane, Markdown, \
+    DataTable, ContentSwitcher, RichLog
+
+from core.constants import DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE, WELCOME_MESSAGE, WIDTH_SCALES, EXCEPTION_TAB_IDS
+from core.theme import CUSTOM_APP_THEMES, APP_THEMES, EDITOR_THEMES
+from features.chat.chat_pane import ChatPane
+from features.chat.ollama_client import OllamaClient
+from features.customizer.customizer_panel import CustomizerPanel
+from features.editor.constants import LANGUAGES
+from features.editor.editor import Editor
+from features.executor import runner
+from features.explorer.dialogs import get_dialog_handler
+from features.explorer.file_browser import FileBrowser
+from ui.top_bar import TopBar
+from utils.config_parser import ConfigParser
+from utils.editor import register_custom_editor_theme
+from utils.keymap import create_mapping_table
+from utils.screen import DEFAULT_LEFT_PANEL_WIDTH, get_side_panel_width, get_tabbed_editor_width, \
     DEFAULT_TABBED_EDITOR_WIDTH
-
-
-class CustomizerPanel(Container):
-    """A slide-in customization panel for selecting color scheme, theme, and language."""
-
-    def __init__(self, app_themes: list, current_app_theme: str, editor_themes: list, current_editor_theme: str,
-                 languages: list):
-        super().__init__(id="customizer")
-        self.app_themes = app_themes
-        self.current_app_theme = current_app_theme
-        self.editor_themes = editor_themes
-        self.current_editor_theme = current_editor_theme
-        self.languages = languages
-
-        # remove duplicates from language options
-        unique_languages = sorted(set(languages))
-        self.languages = [(lang.capitalize(), lang)
-                          for lang in unique_languages]
-
-    def compose(self):
-        """Create the customization panel layout."""
-        yield Container(
-            Select(
-                options=self.app_themes,
-                value=self.current_app_theme,
-                prompt="Select an app theme",
-                tooltip="Select a theme to apply to the app",
-                id="app-theme-picker",
-            ),
-            Select(
-                options=self.editor_themes,
-                value=self.current_editor_theme,
-                prompt="Select an editor theme",
-                tooltip="Select a theme to apply to the editor",
-                id="editor-theme-picker",
-            ),
-            Select(
-                options=self.languages,
-                value="python",
-                prompt="Select a language",
-                tooltip="Select a programming language for the active tab",
-                id="language-picker",
-            ),
-        )
-
-
-class TopBar(Container):
-    """The top bar containing file operation buttons, a spinner, and a clock."""
-
-    def __init__(self):
-        super().__init__()
-        self.date_widget = None
-        self.clock_widget = None
-
-    def compose(self) -> ComposeResult:
-        """Create the top bar layout."""
-        yield Horizontal(
-            Button("Open Folder", id="open-folder",
-                   classes="option open-folder", tooltip="Ctrl+Shift+O"),
-            Button("Open Files", id="open-file",
-                   classes="option open-file", tooltip="Ctrl+O"),
-            Button("New File", id="new-file",
-                   classes="option new-file", tooltip="Ctrl+N"),
-            classes="top-bar",
-        )
-
-
-class FileBrowser(DirectoryTree):
-    """Custom directory tree for browsing files and folders."""
-
-    # Set custom icons before initializing the tree
-    ICON_FILE = "🏷️ "
-    ICON_NODE = "📒 "
-    ICON_NODE_EXPANDED = "📒 "
-
-    def __init__(self, path: Union[str, Path] = "./") -> None:
-        """Initialize the file browser with a given path."""
-        super().__init__(path, id="file-browser")
-        self.selected_path = None
-        self.last_click_time = None
-
-    def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
-        """Detect selection on a file to open it."""
-        event.stop()
-        current_time = datetime.now().timestamp()
-        if self.last_click_time and (current_time - self.last_click_time) < 0.5:
-            catnip = cast(CatnipApp, self.app)
-            self.selected_path = Path(event.path)
-            catnip.open_file_in_tab(self.selected_path)
-        self.last_click_time = current_time
-
-    def on_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
-        """Highlight the selected file or folder."""
-        event.stop()
-        self.selected_path = Path(event.node.data.path)
-
-    def delete_selected_item(self) -> None:
-        """Delete the selected file or folder with confirmation."""
-        if not self.selected_path.name:
-            return
-
-        # ask for confirmation before deletion
-        catnip = cast(CatnipApp, self.app)
-        confirm = catnip.dialog_handler.confirm_action(
-            title="Delete Confirmation",
-            message="Are you sure you want to delete {}'{}'?".format(
-                'folder ' if self.selected_path.is_dir() else '', self.selected_path.name),
-        )
-
-        if not confirm:
-            return  # do nothing if user cancels
-
-        try:
-            if self.selected_path.is_file():
-                self.selected_path.unlink()  # delete file
-            elif self.selected_path.is_dir():
-                shutil.rmtree(self.selected_path)  # delete folder
-
-            # reload the FileBrowser to reflect the change
-            self.reload()
-        except Exception as e:
-            self.notify(f"Error deleting file: {e}", severity="error")
-
-
-def _get_tab_id_from_path(file_path: Union[str, Path]) -> str:
-    """Generate a unique tab ID based on the file path."""
-    if isinstance(file_path, str):
-        file_path = Path(file_path)
-    return re.sub(r'[^a-zA-Z0-9]', '-', file_path.name).lower()
-
-
-def _untitled_tab_has_content(tab: TabPane) -> bool:
-    return tab.id.startswith("untitled") and tab.query_one(TextArea).text.strip()
-
-
-def _create_mapping_table(table: DataTable, bindings: list) -> DataTable:
-    bindings = sorted(bindings, key=lambda x: x[0])
-    accent_color = app.get_css_variables()["accent"]
-    for action, shortcut in bindings:
-        styled_action = Text(str(action), justify="left")
-        styled_shortcut = Text(
-            str(shortcut), style=f"{accent_color}", justify="left")
-        table.add_row(styled_action, styled_shortcut)
-
-    return table
-
-
-def _regis_custom_editor_theme(text_area: TextArea) -> None:
-    for theme in CUSTOM_EDITOR_THEMES:
-        text_area.register_theme(theme)
-
-
-def _update_config_file(field: str, value: str) -> None:
-    config = ConfigParser.load_config()
-    config[field] = value
-    ConfigParser.save_config(config)
-
-
-class ChatPane(TabPane):
-    """A chat-box for interacting with AI via TogetherAI."""
-
-    def __init__(self, title: str = "Cat Me", tab_id: str = "cat-me"):
-        super().__init__(title=title, id=tab_id)
-        self.text_area = None
-        self.message = None
-
-    def compose(self):
-        """Create the chat UI layout."""
-        yield Container(
-            VerticalScroll(id="chat-log"),
-            TextArea(classes="chat-input"),
-            classes="chat-pane",
-        )
-
-    def on_mount(self):
-        """Ensure the text area is focused when the chat opens."""
-        self.text_area = self.query_one(TextArea)
-        self.text_area.focus()
-
-    def on_key(self, event: events.Key) -> None:
-        if event.key == "shift+enter":
-            user_message = self.text_area.text.strip()
-            if user_message:
-                catnip = cast(CatnipApp, self.app)
-                text_log = catnip.query_one(TabbedContent).query_one("#chat-log")
-                text_log.mount(Static(f"{user_message}", classes="user-message"))
-
-                self.text_area.clear()
-                self.run_worker(self._send_message(text_log, user_message))
-
-    async def _send_message(self, text_log: RichLog, user_message: str):
-        """Handles sending user input to LLM and displaying the response."""
-        self.message = None
-
-        try:
-            # show loading animation while waiting for LLM response
-            loading = LoadingIndicator()
-            await text_log.mount(loading)
-
-            # mount a live Markdown widget to update dynamically
-            buffer = ""
-            response_widget = Markdown("", classes="ai-message")
-            await text_log.mount(response_widget)
-
-            # stream response as it comes
-            first_chunk = True
-            async for chunk in OllamaAI.stream_response(user_message):
-                if first_chunk:
-                    await loading.remove()  # remove spinner only when response starts
-                    first_chunk = False
-                buffer += chunk
-                await response_widget.update(buffer)
-                text_log.scroll_end(animate=False)
-                await asyncio.sleep(0)  # let UI refresh
-
-        except Exception as e:
-            await text_log.mount(Static(f"{e}", classes="ai-message"))
+from utils.tabs import get_tab_id_from_path, untitled_tab_has_content
 
 
 class CatnipApp(App):
-    """Main application class to run the top bar screen."""
+    """
+    Main application entry point coordinating UI, editors, and features.
+    """
 
     CSS_PATH = "../styles/entry.tcss"
     ENABLE_COMMAND_PALETTE = False
@@ -290,7 +77,10 @@ class CatnipApp(App):
             self.register_theme(theme)
         self.theme = self.app_theme
 
-        self.file_browser = FileBrowser()
+        self.file_browser = FileBrowser(
+            on_open_file=self.open_file_in_tab,
+            on_confirm_delete=self.dialog_handler.confirm_action,
+        )
         self.customizer_panel = CustomizerPanel(
             APP_THEMES, self.app_theme, EDITOR_THEMES, self.editor_theme, self.languages)
         self.runner = RichLog(highlight=True, markup=True, wrap=True, id="runner-output", auto_scroll=True)
@@ -351,7 +141,7 @@ class CatnipApp(App):
 
         config = ConfigParser.load_config()
         if config.get("llm_on_start"):
-            OllamaAI.serve()
+            OllamaClient.serve()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle sidebar button clicks for opening files/folders or switching panels."""
@@ -432,7 +222,7 @@ class CatnipApp(App):
 
     def action_open_ai_chat(self) -> None:
         """Start the LLM, the open or switch to the Cat Me tab."""
-        OllamaAI.serve()
+        OllamaClient.serve()
         tab_id = "cat-me"
 
         # check if the chat tab is already open
@@ -441,7 +231,10 @@ class CatnipApp(App):
             return
 
         # create and add the new chat tab
-        chat_tab = ChatPane()
+        def get_chat_log() -> RichLog:
+            return self.query_one(TabbedContent).query_one("#chat-log")
+
+        chat_tab = ChatPane(get_chat_log=get_chat_log)
         self.tabbed_editor.add_pane(chat_tab)
         self.tabbed_editor.active = tab_id
         self.opened_tabs[tab_id] = None
@@ -480,7 +273,7 @@ class CatnipApp(App):
         # create a DataTable for key mappings
         table = DataTable(id="key-mapping-table")
         table.add_columns("Action", "Shortcut")
-        table = _create_mapping_table(table, self.desc_key_pairs)
+        table = create_mapping_table(table, self.desc_key_pairs, app.get_css_variables()["accent"])
 
         def mount_table():
             """Mount the table inside the tab."""
@@ -670,31 +463,30 @@ class CatnipApp(App):
         self.exit()
 
     def action_run_script(self) -> None:
-        """Run the current script in the active tab."""
+        file_path = self._get_runnable_file()
+        if not file_path:
+            return
+
+        runner_output = self._prepare_runner_ui()
+        output = runner.run_file(file_path)
+        runner_output.write(f"{output}\n➜ ✗ (catnip):")
+
+    def _get_runnable_file(self) -> Optional[Path]:
         active_tab = self.tabbed_editor.active_pane
 
-        # if no active tabs or active tab is non-executable, do nothing
         if not active_tab or active_tab.id in EXCEPTION_TAB_IDS:
-            return
+            return None
 
         text_area = active_tab.query_one(TextArea)
-        file_content = text_area.text.strip()
+        if not text_area.text.strip():
+            return None
 
-        # if the file is empty, do nothing
-        if not file_content:
-            return
+        return self.opened_tabs.get(active_tab.id)
 
-        # get file's extension from path
-        file_path = self.opened_tabs.get(active_tab.id)
-        file_ext = active_tab.id.split("-")[-1]
-
-        runner_output = self.query_one("#side-panel").query_one("#runner-output", expect_type=RichLog)
+    def _prepare_runner_ui(self) -> RichLog:
+        self.action_save_file()
         self.action_show_runner_panel()
-        if file_ext in RUNNER_SUPPORTED_LANGUAGES:
-            self.action_save_file()
-            runner_output.write(f"{runner.run_script(file_path, file_ext)}\n➜ ✗ (catnip):")
-        else:
-            runner_output.write("Not supported file!\n➜ ✗ (catnip):")
+        return self.query_one("#side-panel").query_one("#runner-output", expect_type=RichLog)
 
     def apply_app_theme(self, app_theme: str) -> None:
         """Apply and save the selected app-wide theme."""
@@ -702,12 +494,12 @@ class CatnipApp(App):
         self.theme = app_theme
 
         # save theme to project config
-        _update_config_file("app_theme", app_theme)
+        ConfigParser.update_config_file("app_theme", app_theme)
         if "key-mappings" in self.opened_tabs:
             mappings_tab = self.tabbed_editor.get_pane("key-mappings")
             mappings_table = self.query_one("#key-mapping-table", expect_type=DataTable)
             mappings_table.clear()
-            _create_mapping_table(mappings_table, self.desc_key_pairs)
+            create_mapping_table(mappings_table, self.desc_key_pairs, app.get_css_variables()["accent"])
             mappings_tab.refresh()
 
     def apply_editor_theme(self, theme: str) -> None:
@@ -716,19 +508,19 @@ class CatnipApp(App):
         for tab in self.tabbed_editor.query(TabPane):
             if tab.query(TextArea):
                 text_area = tab.query_one(TextArea)
-                _regis_custom_editor_theme(text_area)
+                register_custom_editor_theme(text_area)
                 text_area.theme = theme
 
-        # save theme to project config
-        _update_config_file("editor_theme", theme)
+        # save theme to project config and editor_theme attr
+        ConfigParser.update_config_file("editor_theme", theme)
+        self.editor_theme = theme
 
     def apply_language(self, language: str) -> None:
         """Apply the selected language for syntax highlighting."""
         active_tab = self.tabbed_editor.active_pane
-        if active_tab:
-            if active_tab.id not in EXCEPTION_TAB_IDS:
-                text_area = active_tab.query_one(TextArea)
-                text_area.language = language if language != 'typescript' else 'javascript'  # change syntax highlighting
+        if active_tab and active_tab.id not in EXCEPTION_TAB_IDS:
+            text_area = active_tab.query_one(TextArea)
+            text_area.language = Editor.normalize_language(language)
 
     def open_file_dialog(self) -> None:
         """Open a file selection dialog and update the DirectoryTree to its parent folder."""
@@ -756,7 +548,7 @@ class CatnipApp(App):
     def open_file_in_tab(self, file_path: Path) -> None:
         """Open a file in a new tab inside TabbedContent."""
         file_path = file_path.resolve()
-        tab_id = _get_tab_id_from_path(file_path)
+        tab_id = get_tab_id_from_path(file_path)
 
         # prevent opening duplicate tabs
         if tab_id in self.opened_tabs:
@@ -777,7 +569,7 @@ class CatnipApp(App):
                 """Mount the TextArea after the TabPane is fully loaded."""
                 text_area = Editor.code_editor(
                     language=language, soft_wrap=True)
-                _regis_custom_editor_theme(text_area)
+                register_custom_editor_theme(text_area)
                 text_area.theme = self.editor_theme
                 text_area.load_text(content)
                 tab.mount(text_area)  # now mount TextArea safely
@@ -805,7 +597,7 @@ class CatnipApp(App):
         # create a new text editor inside the tab
         text_area = Editor(id=tab_id,
                            language="markdown")
-        _regis_custom_editor_theme(text_area)
+        register_custom_editor_theme(text_area)
         text_area.theme = self.editor_theme
         text_area.load_text("")
 
@@ -820,7 +612,7 @@ class CatnipApp(App):
 
     def _is_tab_content_modified(self, tab: TabPane) -> bool:
         if tab.id.startswith("untitled"):
-            return _untitled_tab_has_content(tab)
+            return untitled_tab_has_content(tab)
         elif tab.id not in EXCEPTION_TAB_IDS:
             file_path = self.opened_tabs.get(tab.id)
             return Path(file_path).read_text(encoding="utf-8") != tab.query_one(TextArea).text

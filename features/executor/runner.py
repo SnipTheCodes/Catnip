@@ -1,7 +1,26 @@
 import subprocess
+from pathlib import Path
+
+from .constants import RUNNER_SUPPORTED_LANGUAGES
+
+
+def run_file(file_path: Path) -> str:
+    """
+    Run a file if supported and return output text.
+    """
+
+    ext = file_path.suffix.lstrip(".")
+
+    if ext not in RUNNER_SUPPORTED_LANGUAGES:
+        return "Not supported file!"
+
+    return run_script(file_path, ext)
 
 
 def run_script(file_path: str, extension: str = "js") -> None:
+    if extension not in RUNNER_SUPPORTED_LANGUAGES:
+        raise ValueError(f"Unsupported script extension: {extension}")
+
     try:
         if extension == "py":
             output = subprocess.check_output(
