@@ -49,6 +49,7 @@ if [[ "$1" == "web" ]]; then
     echo -e "🍀 catnip web server running silently in background - press CTRL+C to stop"
 
     # wait for ctrl+c to gracefully shut down
+    # shellcheck disable=SC2064
     trap "kill $SERVER_PID >/dev/null 2>&1; echo -e '\nserver stopped!'; exit" INT
     while true; do sleep 1; done
 else

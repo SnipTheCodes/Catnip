@@ -1,6 +1,5 @@
 textual
 textual[syntax]
-pyyaml
 rich
 asyncio
 together

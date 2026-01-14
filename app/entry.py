@@ -1,4 +1,3 @@
-import random
 from pathlib import Path
 from typing import Optional
 
@@ -8,7 +7,9 @@ from textual.containers import Container, Horizontal, VerticalScroll, Vertical
 from textual.widgets import Button, Footer, Select, TextArea, TabbedContent, TabPane, Markdown, \
     DataTable, ContentSwitcher, RichLog
 
-from core.constants import DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE, WELCOME_MESSAGE, WIDTH_SCALES, EXCEPTION_TAB_IDS
+from core.constants import DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE, WELCOME_MESSAGE, WIDTH_SCALES, EXCEPTION_TAB_IDS, \
+    SIDE_PANEL_ID_MAPPING
+from core.document.context import DocumentContext
 from core.theme import CUSTOM_APP_THEMES, APP_THEMES, EDITOR_THEMES
 from features.chat.chat_pane import ChatPane
 from features.chat.ollama_client import OllamaClient
@@ -24,12 +25,12 @@ from utils.editor import register_custom_editor_theme
 from utils.keymap import create_mapping_table
 from utils.screen import DEFAULT_LEFT_PANEL_WIDTH, get_side_panel_width, get_tabbed_editor_width, \
     DEFAULT_TABBED_EDITOR_WIDTH
-from utils.tabs import get_tab_id_from_path, untitled_tab_has_content
 
 
 class CatnipApp(App):
     """
-    Main application entry point coordinating UI, editors, and features.
+    Main application entry point responsible for UI orchestration.
+    Document state and file lifecycle are delegated to DocumentContext.
     """
 
     CSS_PATH = "../styles/entry.tcss"
@@ -61,15 +62,14 @@ class CatnipApp(App):
     def __init__(self) -> None:
         """Initialize the CatnipApp with a dialog handler."""
         super().__init__()
+        self.opened_tabs = []
+        self.tabbed_editor = None
+        # DocumentContext manages document lifecycle and state (open/save/close/dirty)
+        self.documents = DocumentContext()
         self.side_panel_width_percentage = DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE
         self.dialog_handler = get_dialog_handler()
-        self.current_path = Path.cwd()
-        self.theme_picker = None
-        self.tabbed_editor = None
-        self.opened_tabs = {}
         self.languages = LANGUAGES
         self.desc_key_pairs = [(b.description, b.key) for b in self.BINDINGS]
-
         # load config, register custom themes and apply
         self.app_theme = ConfigParser.get("app_theme", "atom_dark")
         self.editor_theme = ConfigParser.get("editor_theme", "atom_dark")
@@ -175,20 +175,20 @@ class CatnipApp(App):
             self.action_show_runner_panel()
             return
 
-        # handle switching side panel
-        side_panel_id_mapping = {
-            "file-browser": "file-browser",
-            "customizer": "customizer",
-            "runner": "runner-output",
-        }
-
-        if button_id in side_panel_id_mapping:
+        if button_id in SIDE_PANEL_ID_MAPPING:
             # switch active panel
-            side_panel.current = side_panel_id_mapping[button_id]
+            side_panel.current = SIDE_PANEL_ID_MAPPING[button_id]
             self._enable_side_panel(side_panel)
             if side_panel.current == "file-browser":
                 # reload file browser
                 self.query_one(FileBrowser).reload()
+
+    def _enable_side_panel(self, side_panel: ContentSwitcher) -> None:
+        if not side_panel.display:
+            side_panel.display = True
+            side_panel.styles.width = DEFAULT_LEFT_PANEL_WIDTH
+            self.query_one(".tabbed-editor").styles.width = DEFAULT_TABBED_EDITOR_WIDTH
+            self.side_panel_width_percentage = DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE
 
     def on_select_changed(self, event: Select.Changed) -> None:
         """Handle selection changes in the Customizer Panel."""
@@ -211,6 +211,30 @@ class CatnipApp(App):
         except TypeError:
             pass
 
+    def on_text_area_changed(self, event: TextArea.Changed) -> None:
+        """
+        Mark the active document as dirty when the editor content
+        actually diverges from the document's persisted content.
+
+        Note:
+        - TextArea.Changed is also fired for programmatic updates
+          (e.g. when loading file content).
+        - Dirty state is only updated when a real content change occurs.
+        """
+        tab = event.control.parent
+
+        if not isinstance(tab, TabPane):
+            return
+
+        try:
+            document = self.documents.get(tab.id)
+
+            # only mark dirty if content actually differs
+            if event.control.text != document.content:
+                self.documents.mark_dirty(tab.id, event.control.text)
+        except KeyError:
+            pass
+
     def action_open_file(self) -> None:
         self.open_file_dialog()
 
@@ -221,7 +245,9 @@ class CatnipApp(App):
         self.create_a_file()
 
     def action_open_ai_chat(self) -> None:
-        """Start the LLM, the open or switch to the Cat Me tab."""
+        """
+        Start the LLM, the open or switch to the Cat Me tab.
+        """
         OllamaClient.serve()
         tab_id = "cat-me"
 
@@ -236,8 +262,8 @@ class CatnipApp(App):
 
         chat_tab = ChatPane(get_chat_log=get_chat_log)
         self.tabbed_editor.add_pane(chat_tab)
-        self.tabbed_editor.active = tab_id
-        self.opened_tabs[tab_id] = None
+        self.tabbed_editor.active = self.opened_tabs
+        self.opened_tabs.append(tab_id)
 
     def action_show_file_browser(self) -> None:
         side_panel = self.query_one("#side-panel")
@@ -259,7 +285,9 @@ class CatnipApp(App):
             runner_output.write(output)
 
     def action_show_shortcuts(self) -> None:
-        """Open the key mappings inside a new tab in the tabbed editor."""
+        """
+        Open the key mappings inside a new tab in the tabbed editor.
+        """
         tab_id = "key-mappings"
         tabbed_editor = self.query_one(".tabbed-editor")
         # check if the tab already exists
@@ -285,18 +313,24 @@ class CatnipApp(App):
 
         # set active tab
         self.tabbed_editor.active = tab_id
-        self.opened_tabs[tab_id] = [None, False]
+        self.opened_tabs.append(tab_id)
 
     def action_extend_side_panel(self) -> None:
-        """Extend the width of the side panel."""
-        self.adjust_side_panel(is_reduce=False)
+        """
+        Extend the width of the side panel.
+        """
+        self._adjust_side_panel(is_reduce=False)
 
     def action_reduce_side_panel(self) -> None:
-        """Reduce the width of the side panel."""
-        self.adjust_side_panel()
+        """
+        Reduce the width of the side panel.
+        """
+        self._adjust_side_panel()
 
-    def adjust_side_panel(self, is_reduce: bool = True) -> None:
-        """Adjust the width of the left side panel."""
+    def _adjust_side_panel(self, is_reduce: bool = True) -> None:
+        """
+        Adjust the width of the left side panel.
+        """
         side_panel = self.query_one("#side-panel")
 
         # get the current width scale index
@@ -320,7 +354,9 @@ class CatnipApp(App):
             tabbed_editor.styles.width = get_tabbed_editor_width(side_panel_width)
 
     def action_hide_top_bar(self) -> None:
-        """Hide the Top Bar."""
+        """
+        Hide the Top Bar.
+        """
         main_screen = self.query_one(".main-screen")
         top_bar = self.query_one(".top-bar")
 
@@ -329,7 +365,9 @@ class CatnipApp(App):
             main_screen.add_class("expanded")
 
     def action_unhide_top_bar(self) -> None:
-        """Unhide the Top Bar."""
+        """
+        Unhide the Top Bar.
+        """
         main_screen = self.query_one(".main-screen")
         top_bar = self.query_one(".top-bar")
 
@@ -338,131 +376,192 @@ class CatnipApp(App):
             main_screen.remove_class("expanded")
 
     def action_delete_selected_file(self) -> None:
-        """Delete the selected file in FileBrowser."""
-        self.query_one(FileBrowser).delete_selected_item()
+        """
+        Delete the selected file or folder and close any open document
+        associated with it.
+        """
+        deleted_path = self.query_one(FileBrowser).delete_selected_item()
+        if not deleted_path:
+            return
+        self.notify(str(deleted_path))
+
+        closed_docs = self.documents.close_by_path(deleted_path)
+        self.notify(str(closed_docs))
+        for doc_id in closed_docs:
+            if doc_id in self.opened_tabs:
+                self.tabbed_editor.remove_pane(doc_id)
+                self.opened_tabs.remove(doc_id)
+
+        # refresh file browser after saving a new file
+        self.query_one(FileBrowser).reload()
 
     def action_save_file(self) -> None:
-        """Save the current file. If it's a new file, prompt the user to select a save location."""
-        dialog_handler = get_dialog_handler()
-        active_tab = self.tabbed_editor.active_pane
+        """
+        Save the currently active document.
 
-        if not active_tab:
-            self.notify("No active tab to save.", severity="warning")
+        If the active tab represents a document managed by DocumentContext,
+        the document is saved to disk. If the document has not been saved
+        before, the user is prompted to choose a save location.
+
+        Non-document tabs (e.g. welcome screen, shortcuts, AI chat) are ignored.
+        """
+        tab = self.tabbed_editor.active_pane
+        if not tab:
             return
 
-        text_area = active_tab.query_one(TextArea)
-        file_content = text_area.text
-        active_tab_id = active_tab.id  # get the tab id
+        try:
+            document = self.documents.get(tab.id)
+        except KeyError:
+            return
 
-        # if file is new (Untitled), prompt save dialog
-        if active_tab_id.startswith("untitled"):
-            file_path = dialog_handler.select_folder_save()
+        # if the document has never been saved, ask for a path
+        if document.path is None:
+            file_path = self.dialog_handler.select_folder_save()
             if not file_path:
-                pass
-
+                return
             try:
-                with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(file_content)
+                document_id = document.id
+                self.documents.save_as(document_id, file_path)
                 self.notify(f"File saved to {file_path}")
 
                 # open the saved file in new tab
                 self.open_file_in_tab(file_path)
 
                 # remove old tab
-                self.tabbed_editor.remove_pane(active_tab_id)
-                self.opened_tabs.pop(active_tab_id, None)
-
-                # refresh file browser after saving a new file
-                self.query_one(FileBrowser).reload()
+                self.tabbed_editor.remove_pane(document_id)
+                self.opened_tabs.remove(document_id)
 
                 # open the file browser
                 side_panel = self.query_one("#side-panel")
                 side_panel.current = "file-browser"
-                self._enable_side_panel(side_panel)
+
+                # refresh file browser after saving a new file
+                self.query_one(FileBrowser).path = str(file_path.parent)
+                self.query_one(FileBrowser).reload()
 
             except Exception as e:
                 print(f"Failed to save file: {str(e)}")
-        else:
-            # if it's an existing file, just save
-            file_path = self.opened_tabs.get(active_tab.id)
-            try:
-                with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(file_content)
 
-                # refresh file browser
+        elif self.documents.get(document.id).dirty:
+            try:
+                self.documents.save(document.id)
                 self.query_one(FileBrowser).reload()
+                self.notify(f"Saved {document.title}")
             except Exception as e:
-                self.notify(f"Failed to save file: {str(e)}", severity="error")
+                self.notify(f"Failed to save file: {e}", severity="error")
+                return
 
     def action_save_file_as(self) -> None:
-        """Prompt user to choose a new filename and save."""
-        active_tab = self.tabbed_editor.active_pane
-        text_area = active_tab.query_one(TextArea)
+        """
+        Save the currently active document under a new file path.
 
-        # open Save As dialog
-        new_file_path = self.dialog_handler.select_file_save()
+        If the active tab represents a document managed by DocumentContext,
+        the user is prompted to choose a new save location. The document is
+        then persisted to disk and its identity (path, title, dirty state)
+        is updated accordingly.
 
-        try:
-            with open(new_file_path, "w", encoding="utf-8") as f:
-                f.write(text_area.text)
-            self.notify(f"File saved at: {new_file_path}")
-
-            # update tracking to recognize this as a saved file
-            self.opened_tabs[active_tab.id][0] = new_file_path
-            active_tab.title = Path(new_file_path).name  # update tab title
-
-            # refresh file browser after saving a new file
-            self.query_one(FileBrowser).reload()
-        except Exception as e:
-            self.notify(f"ERROR: Failed to save file - {e}", severity="error")
-
-    def action_close_tab(self) -> None:
-        """Close the currently active tab."""
-        active_tab = self.tabbed_editor.active_pane
-
-        if not active_tab:
+        Non-document tabs are ignored.
+        """
+        tab = self.tabbed_editor.active_pane
+        if not tab:
             return
 
-        if active_tab.id not in EXCEPTION_TAB_IDS:
-            # check if there are unsaved changes
-            try:
-                if self._is_tab_content_modified(active_tab):
-                    confirm = self.dialog_handler.confirm_action(
-                        title="Save Confirmation",
-                        message=f"Do you want to save the changes you made in {active_tab.name}?",
-                    )
-                    if confirm:
-                        self.action_save_file()
+        try:
+            document = self.documents.get(tab.id)
+        except KeyError:
+            return
 
-            except FileNotFoundError:
-                pass
+        new_file_path = self.dialog_handler.select_folder_save()
+        if not new_file_path:
+            return
 
-        # remove tab from tracking and UI
-        self.tabbed_editor.remove_pane(active_tab.id)
-        self.opened_tabs.pop(active_tab.id, None)
+        try:
+            self.documents.save_as(document.id, new_file_path)
+            tab.title = Path(new_file_path).name
 
-        # switch to last tab if exists
-        if self.opened_tabs:
-            self.tabbed_editor.active = next(reversed(self.opened_tabs))
+            # refresh file browser after saving a new file
+            self.query_one(FileBrowser).path = str(new_file_path.parent)
+            self.query_one(FileBrowser).reload()
+
+            self.notify(f"Saved as {new_file_path}")
+        except Exception as e:
+            self.notify(f"Failed to save file: {e}", severity="error")
+
+    def action_close_tab(self) -> None:
+        """
+        Close the currently active tab.
+
+        If the active tab corresponds to a document managed by DocumentContext and
+        the document has unsaved changes, the user is prompted to save before the
+        tab is closed.
+
+        Tabs that do not represent documents (e.g. welcome screen, key mappings,
+        AI chat) are closed immediately without any save prompt.
+        """
+        tab = self.tabbed_editor.active_pane
+        if not tab:
+            return
+
+        try:
+            document = self.documents.get(tab.id)
+            if document.dirty:
+                confirm = self.dialog_handler.confirm_action(
+                    title="Unsaved Changes",
+                    message=f"Do you want to save changes to {document.title}?"
+                )
+                if confirm:
+                    if document.path is None:
+                        file_path = self.dialog_handler.select_folder_save()
+                        if not file_path:
+                            return
+                    else:
+                        self.documents.save(document.id)
+
+            self.documents.close(document.id)
+        except KeyError:
+            pass
+        finally:
+            self.tabbed_editor.remove_pane(tab.id)
+            self.opened_tabs.remove(tab.id)
 
     def action_quit(self) -> None:
-        """Prompt to save changes before quitting."""
-        for tab_id in reversed(list(self.opened_tabs.keys())):
-            if tab_id not in ("key-mappings", "welcome"):
-                tab = self.tabbed_editor.get_pane(tab_id)
-                if self._is_tab_content_modified(tab):
-                    self.tabbed_editor.active = tab_id
+        """
+        Quit the application, prompting to save unsaved document changes if needed.
 
-                    confirm = self.dialog_handler.confirm_action(
-                        title="Unsaved Changes",
-                        message=f"Do you want to save the changes you made in {tab.name}?",
-                    )
+        This method iterates over all open tabs and checks whether each tab represents
+        a document managed by DocumentContext. For document tabs with unsaved changes,
+        the user is prompted to confirm saving before the application exits.
 
-                    if confirm:
-                        self.action_save_file()
+        Non-document tabs (e.g. welcome screen, key mappings, AI chat) are ignored.
+        """
+        # Iterate over open panes in reverse order (last active first)
+        for tab in reversed(list(self.tabbed_editor.query(TabPane))):
+            try:
+                document = self.documents.get(tab.id)
+            except KeyError:
+                continue
+
+            if document.dirty:
+                self.tabbed_editor.active = tab.id
+                confirm = self.dialog_handler.confirm_action(
+                    title="Unsaved Changes",
+                    message=f"Do you want to save changes to {document.title}?",
+                )
+                if confirm:
+                    self.documents.save(document.id)
+
         self.exit()
 
     def action_run_script(self) -> None:
+        """
+        Run the currently active document using the configured runner.
+
+        The active tab must represent a runnable document managed by
+        DocumentContext. The document is saved if needed, the runner panel
+        is shown, and the execution output is written to the runner log.
+
+        Non-document tabs or empty documents are ignored.
+        """
         file_path = self._get_runnable_file()
         if not file_path:
             return
@@ -481,7 +580,7 @@ class CatnipApp(App):
         if not text_area.text.strip():
             return None
 
-        return self.opened_tabs.get(active_tab.id)
+        return self.documents.get(active_tab.id).path
 
     def _prepare_runner_ui(self) -> RichLog:
         self.action_save_file()
@@ -489,7 +588,9 @@ class CatnipApp(App):
         return self.query_one("#side-panel").query_one("#runner-output", expect_type=RichLog)
 
     def apply_app_theme(self, app_theme: str) -> None:
-        """Apply and save the selected app-wide theme."""
+        """
+        Apply and save the selected app-wide theme.
+        """
 
         self.theme = app_theme
 
@@ -503,7 +604,9 @@ class CatnipApp(App):
             mappings_tab.refresh()
 
     def apply_editor_theme(self, theme: str) -> None:
-        """Apply the selected theme to the code editor (syntax highlighting)."""
+        """
+        Apply the selected theme to the code editor (syntax highlighting).
+        """
 
         for tab in self.tabbed_editor.query(TabPane):
             if tab.query(TextArea):
@@ -516,114 +619,113 @@ class CatnipApp(App):
         self.editor_theme = theme
 
     def apply_language(self, language: str) -> None:
-        """Apply the selected language for syntax highlighting."""
+        """
+        Apply the selected language for syntax highlighting.
+        """
         active_tab = self.tabbed_editor.active_pane
         if active_tab and active_tab.id not in EXCEPTION_TAB_IDS:
             text_area = active_tab.query_one(TextArea)
             text_area.language = Editor.normalize_language(language)
 
     def open_file_dialog(self) -> None:
-        """Open a file selection dialog and update the DirectoryTree to its parent folder."""
+        """
+        Open a file selection dialog and open the selected files in editor tabs.
+        """
         file_paths = self.dialog_handler.select_file()
-        parent_folder = None
-        if file_paths:
-            for file in file_paths:
-                self.open_file_in_tab(file)
-                parent_folder = file_paths[0].parent
-            # update DirectoryTree to the parent folder
-            self.current_path = parent_folder.resolve()
-            self.query_one(FileBrowser).path = str(self.current_path)
+        if not file_paths:
+            return
+
+        for file in file_paths:
+            self.open_file_in_tab(file)
+
+        file_browser = self.query_one(FileBrowser)
+        file_browser.path = str(file_paths[0].parent)
 
     def open_folder_dialog(self) -> None:
-        """Open a folder selection dialog and update the DirectoryTree."""
+        """
+        Open a folder selection dialog and load it into the file browser.
+        """
         folder_path = self.dialog_handler.select_folder()
-        if folder_path:
-            self.current_path = Path(folder_path).resolve()
-            self.query_one(FileBrowser).path = str(
-                self.current_path)  # update directory tree
+        if not folder_path:
+            return
 
-            # reload file browser after selecting a folder
-            self.query_one(FileBrowser).reload()
+        file_browser = self.query_one(FileBrowser)
+        file_browser.path = str(Path(folder_path).resolve())
+        file_browser.reload()
 
     def open_file_in_tab(self, file_path: Path) -> None:
-        """Open a file in a new tab inside TabbedContent."""
-        file_path = file_path.resolve()
-        tab_id = get_tab_id_from_path(file_path)
+        """
+        Open a file in the editor as a tab.
 
-        # prevent opening duplicate tabs
-        if tab_id in self.opened_tabs:
-            self.tabbed_editor.active = tab_id
-            return
+        This method delegates document loading and lifecycle management to
+        DocumentContext. If the file is already open, the existing tab is
+        activated. Otherwise, a new editor tab is created and populated
+        with the file content.
+        """
+        file_path = file_path.resolve()
 
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            # detect file language
-            language = Editor.get_file_language(file_path, self.languages)
-
-            # create a new tab
-            tab = TabPane(title=file_path.name, id=tab_id, name=file_path.name)
-
-            def mount_textarea():
-                """Mount the TextArea after the TabPane is fully loaded."""
-                text_area = Editor.code_editor(
-                    language=language, soft_wrap=True)
-                register_custom_editor_theme(text_area)
-                text_area.theme = self.editor_theme
-                text_area.load_text(content)
-                tab.mount(text_area)  # now mount TextArea safely
-
-            self.tabbed_editor.add_pane(tab)  # add the new tab
-
-            self.call_after_refresh(mount_textarea)  # ensure tab is mounted first
-
-            # set the new tab as active
-            self.tabbed_editor.active = tab_id
-
-            self.opened_tabs[tab_id] = file_path  # track opened files
-
-        except Exception:
+            document = self.documents.open(file_path)
+        except Exception as e:
+            self.notify(f"Failed to open file: {e}", severity="error")
             return
 
+        # if tab already exists → just activate
+        if document.id in self.opened_tabs:
+            self.tabbed_editor.active = document.id
+            return
+
+        tab = TabPane(
+            id=document.id,
+            title=document.title,
+            name=document.title,
+        )
+
+        self.tabbed_editor.add_pane(tab)
+        self.call_after_refresh(
+            lambda: self._mount_editor_for_document(tab, document)
+        )
+        self.tabbed_editor.active = document.id
+        self.opened_tabs.append(document.id)
+
     def create_a_file(self) -> None:
-        """Create a new blank tab inside the tabbed content."""
+        """
+        Create a new untitled document and open it in the editor.
 
-        # generate a unique tab name
-        tab_index = "".join(random.choices("abcdefghijklmnopqrstuvwxyz0123456789", k=6))
-        tab_name = "Untitled"
-        tab_id = f"{tab_name}-{tab_index}".lower()
+        This method delegates untitled document creation to DocumentContext,
+        then creates a corresponding editor tab and mounts a text editor
+        initialized with the document's default state.
+        """
 
-        # create a new text editor inside the tab
-        text_area = Editor(id=tab_id,
-                           language="markdown")
+        try:
+            document = self.documents.create_untitled()
+        except Exception as e:
+            self.notify(f"Failed to create new file: {e}", severity="error")
+            return
+
+        tab = TabPane(
+            id=document.id,
+            title=document.title,
+            name=document.title,
+        )
+
+        self.tabbed_editor.add_pane(tab)
+        self.call_after_refresh(
+            lambda: self._mount_editor_for_document(tab, document)
+        )
+        self.tabbed_editor.active = document.id
+        self.opened_tabs.append(document.id)
+
+    def _mount_editor_for_document(self, tab: TabPane, document) -> None:
+        text_area = Editor.code_editor(
+            language=document.language or "markdown",
+            soft_wrap=True,
+        )
         register_custom_editor_theme(text_area)
         text_area.theme = self.editor_theme
-        text_area.load_text("")
+        text_area.load_text(document.content or "")
 
-        # create and add the new tab
-        new_tab = TabPane(title=tab_name, id=tab_id, name=tab_name)
-        self.tabbed_editor.add_pane(new_tab)
-        new_tab.mount(text_area)
-
-        # set the new tab as active and add to opened tabs
-        self.tabbed_editor.active = tab_id
-        self.opened_tabs[tab_id] = None
-
-    def _is_tab_content_modified(self, tab: TabPane) -> bool:
-        if tab.id.startswith("untitled"):
-            return untitled_tab_has_content(tab)
-        elif tab.id not in EXCEPTION_TAB_IDS:
-            file_path = self.opened_tabs.get(tab.id)
-            return Path(file_path).read_text(encoding="utf-8") != tab.query_one(TextArea).text
-        return None
-
-    def _enable_side_panel(self, side_panel: ContentSwitcher) -> None:
-        if not side_panel.display:
-            side_panel.display = True
-            side_panel.styles.width = DEFAULT_LEFT_PANEL_WIDTH
-            self.query_one(".tabbed-editor").styles.width = DEFAULT_TABBED_EDITOR_WIDTH
-            self.side_panel_width_percentage = DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE
+        tab.mount(text_area)
 
 
 if __name__ == "__main__":

@@ -17,4 +17,11 @@ WELCOME_MESSAGE = """
 # width sizes for side panel and tabbed editor in percentages
 WIDTH_SCALES = [0, 0.25, 0.5, 1]
 DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE = WIDTH_SCALES[1]
+
 EXCEPTION_TAB_IDS = ("key-mappings", "welcome", "cat-me")
+
+SIDE_PANEL_ID_MAPPING = {
+    "file-browser": "file-browser",
+    "customizer": "customizer",
+    "runner": "runner-output",
+}
