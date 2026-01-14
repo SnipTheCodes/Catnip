@@ -12,7 +12,7 @@
 
 ## 🌶️ Getting Started
 ### 1️⃣ Prerequisites
-- Python 3.9+
+- Python 3.12+
 - pip
 
 ### 2️⃣ Installation

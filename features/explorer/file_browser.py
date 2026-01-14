@@ -36,9 +36,9 @@ class FileBrowser(DirectoryTree):
         event.stop()
         self.selected_path = Path(event.node.data.path)
 
-    def delete_selected_item(self) -> None:
+    def delete_selected_item(self) -> Path:
         if not self.selected_path or not self.selected_path.name:
-            return
+            return None
 
         if self.on_confirm_delete:
             confirm = self.on_confirm_delete(
@@ -49,7 +49,7 @@ class FileBrowser(DirectoryTree):
                 ),
             )
             if not confirm:
-                return
+                return None
 
         try:
             if self.selected_path.is_file():
@@ -57,5 +57,6 @@ class FileBrowser(DirectoryTree):
             else:
                 shutil.rmtree(self.selected_path)
             self.reload()
+            return self.selected_path
         except Exception as e:
             self.notify(f"Error deleting file: {e}", severity="error")
