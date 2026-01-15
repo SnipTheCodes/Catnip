@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Optional
 
+from textual._node_list import DuplicateIds
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, VerticalScroll, Vertical
@@ -60,30 +61,54 @@ class CatnipApp(App):
     ]
 
     def __init__(self) -> None:
-        """Initialize the CatnipApp with a dialog handler."""
         super().__init__()
-        self.opened_tabs = []
+
+        self._init_core_state()
+        self._init_config()
+        self._init_dialogs()
+        self._init_themes()
+        self._init_features()
+
+    def _init_core_state(self) -> None:
         self.tabbed_editor = None
-        # DocumentContext manages document lifecycle and state (open/save/close/dirty)
         self.documents = DocumentContext()
         self.side_panel_width_percentage = DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE
-        self.dialog_handler = get_dialog_handler()
         self.languages = LANGUAGES
         self.desc_key_pairs = [(b.description, b.key) for b in self.BINDINGS]
-        # load config, register custom themes and apply
+
+    def _init_config(self) -> None:
         self.app_theme = ConfigParser.get("app_theme", "atom_dark")
         self.editor_theme = ConfigParser.get("editor_theme", "atom_dark")
+
+    def _init_dialogs(self) -> None:
+        self.dialog_handler = get_dialog_handler()
+
+    def _init_themes(self) -> None:
         for theme in CUSTOM_APP_THEMES:
             self.register_theme(theme)
         self.theme = self.app_theme
 
+    def _init_features(self) -> None:
         self.file_browser = FileBrowser(
             on_open_file=self.open_file_in_tab,
             on_confirm_delete=self.dialog_handler.confirm_action,
         )
+
         self.customizer_panel = CustomizerPanel(
-            APP_THEMES, self.app_theme, EDITOR_THEMES, self.editor_theme, self.languages)
-        self.runner = RichLog(highlight=True, markup=True, wrap=True, id="runner-output", auto_scroll=True)
+            APP_THEMES,
+            self.app_theme,
+            EDITOR_THEMES,
+            self.editor_theme,
+            self.languages,
+        )
+
+        self.runner = RichLog(
+            highlight=True,
+            markup=True,
+            wrap=True,
+            id="runner-output",
+            auto_scroll=True,
+        )
 
     def compose(self) -> ComposeResult:
         """Create the screen layout."""
@@ -92,15 +117,12 @@ class CatnipApp(App):
 
         # create a "Welcome" tab with Markdown instructions
         welcome_tab = TabPane(title="Welcome", id="welcome")
-        welcome_markdown = Markdown(WELCOME_MESSAGE, classes="welcome-md")
 
-        def mount_welcome_markdown():
-            """Mount the Markdown widget after the TabPane is fully attached."""
-            welcome_tab.mount(welcome_markdown)
+        def _mount_welcome_markdown():
+            self.tabbed_editor.add_pane(welcome_tab)
+            welcome_tab.mount(Markdown(WELCOME_MESSAGE, classes="welcome-md"))
 
-        self.call_after_refresh(lambda: self.tabbed_editor.add_pane(welcome_tab))  # ensure tabbed editor exists
-        # mount Markdown safely
-        self.call_after_refresh(mount_welcome_markdown)
+        self.call_after_refresh(_mount_welcome_markdown)
 
         yield Vertical(
             TopBar(),
@@ -132,7 +154,9 @@ class CatnipApp(App):
         )
 
     def on_mount(self) -> None:
-        """Add class attribute to File Browser."""
+        """
+        Add class attribute to File Browser.
+        """
         self.query_one(FileBrowser).classes = "file-browser"
         side_panel = self.query_one("#side-panel")
         tabbed_editor = self.query_one(".tabbed-editor")
@@ -144,36 +168,39 @@ class CatnipApp(App):
             OllamaClient.serve()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle sidebar button clicks for opening files/folders or switching panels."""
+        """
+        Handle sidebar button clicks for opening files/folders or switching panels.
+        """
         side_panel = self.query_one("#side-panel")
         button_id = event.button.id
         # handle file and folder opening separately
-        if button_id == "open-file":
-            self.open_file_dialog()
-            # switch to file browser panel
-            side_panel.current = "file-browser"
-            # if the side panel is hidden, show it again
-            self._enable_side_panel(side_panel)
-            return
-        elif button_id == "open-folder":
-            self.open_folder_dialog()
-            side_panel.current = "file-browser"
-            self._enable_side_panel(side_panel)
-            return
-        elif button_id == "new-file":
-            self.create_a_file()
-            side_panel.current = "customizer"
-            self._enable_side_panel(side_panel)
-            return
-        elif button_id == "key-mapping":
-            self.action_show_shortcuts()
-            return
-        elif button_id == "cat-me":
-            self.action_open_ai_chat()
-            return
-        elif button_id == "runner":
-            self.action_show_runner_panel()
-            return
+        match event.button.id:
+            case "open-file":
+                self.open_file_dialog()
+                # switch to file browser panel
+                side_panel.current = "file-browser"
+                # if the side panel is hidden, show it again
+                self._enable_side_panel(side_panel)
+                return
+            case "open-folder":
+                self.open_folder_dialog()
+                side_panel.current = "file-browser"
+                self._enable_side_panel(side_panel)
+                return
+            case "new-file":
+                self.create_a_file()
+                side_panel.current = "customizer"
+                self._enable_side_panel(side_panel)
+                return
+            case "key-mapping":
+                self.action_show_shortcuts()
+                return
+            case "cat-me":
+                self.action_open_ai_chat()
+                return
+            case "runner":
+                self.action_show_runner_panel()
+                return
 
         if button_id in SIDE_PANEL_ID_MAPPING:
             # switch active panel
@@ -191,10 +218,11 @@ class CatnipApp(App):
             self.side_panel_width_percentage = DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE
 
     def on_select_changed(self, event: Select.Changed) -> None:
-        """Handle selection changes in the Customizer Panel."""
-
-        select_id = event.select.id  # get the ID of the changed select widget
-        selected_value = event.value  # get the selected value
+        """
+        Handle selection changes in the Customizer Panel.
+        """
+        select_id = event.select.id
+        selected_value = event.value
 
         try:
             if select_id == "app-theme-picker":
@@ -251,19 +279,16 @@ class CatnipApp(App):
         OllamaClient.serve()
         tab_id = "cat-me"
 
-        # check if the chat tab is already open
-        if tab_id in self.opened_tabs:
+        try:
+            # create and add the new chat tab
+            def get_chat_log() -> RichLog:
+                return self.query_one(TabbedContent).query_one("#chat-log")
+
+            chat_tab = ChatPane(get_chat_log=get_chat_log)
+            self.tabbed_editor.add_pane(chat_tab)
             self.tabbed_editor.active = tab_id
-            return
-
-        # create and add the new chat tab
-        def get_chat_log() -> RichLog:
-            return self.query_one(TabbedContent).query_one("#chat-log")
-
-        chat_tab = ChatPane(get_chat_log=get_chat_log)
-        self.tabbed_editor.add_pane(chat_tab)
-        self.tabbed_editor.active = self.opened_tabs
-        self.opened_tabs.append(tab_id)
+        except DuplicateIds:
+            self.tabbed_editor.active = tab_id
 
     def action_show_file_browser(self) -> None:
         side_panel = self.query_one("#side-panel")
@@ -289,31 +314,26 @@ class CatnipApp(App):
         Open the key mappings inside a new tab in the tabbed editor.
         """
         tab_id = "key-mappings"
-        tabbed_editor = self.query_one(".tabbed-editor")
-        # check if the tab already exists
-        if tab_id in self.opened_tabs:
-            tabbed_editor.active = tab_id
-            return
+        try:
+            # create a new tab for key mappings
+            tab = TabPane(title="Shortcuts", id=tab_id)
 
-        # create a new tab for key mappings
-        tab = TabPane(title="Shortcuts", id=tab_id)
+            # create a DataTable for key mappings
+            table = DataTable(id="key-mapping-table")
+            table.add_columns("Action", "Shortcut")
+            table = create_mapping_table(table, self.desc_key_pairs, app.get_css_variables()["accent"])
 
-        # create a DataTable for key mappings
-        table = DataTable(id="key-mapping-table")
-        table.add_columns("Action", "Shortcut")
-        table = create_mapping_table(table, self.desc_key_pairs, app.get_css_variables()["accent"])
+            def mount_table():
+                """Mount the table inside the tab."""
+                tab.mount(VerticalScroll(table))
 
-        def mount_table():
-            """Mount the table inside the tab."""
-            tab.mount(VerticalScroll(table))
+            # add tab and mount content
+            self.tabbed_editor.add_pane(tab)
+            self.call_after_refresh(mount_table)
 
-        # add tab and mount content
-        self.tabbed_editor.add_pane(tab)
-        self.call_after_refresh(mount_table)
-
-        # set active tab
-        self.tabbed_editor.active = tab_id
-        self.opened_tabs.append(tab_id)
+            self.tabbed_editor.active = tab_id
+        except DuplicateIds:
+            self.tabbed_editor.active = tab_id
 
     def action_extend_side_panel(self) -> None:
         """
@@ -383,16 +403,13 @@ class CatnipApp(App):
         deleted_path = self.query_one(FileBrowser).delete_selected_item()
         if not deleted_path:
             return
-        self.notify(str(deleted_path))
 
         closed_docs = self.documents.close_by_path(deleted_path)
-        self.notify(str(closed_docs))
         for doc_id in closed_docs:
-            if doc_id in self.opened_tabs:
-                self.tabbed_editor.remove_pane(doc_id)
-                self.opened_tabs.remove(doc_id)
+            self.tabbed_editor.remove_pane(doc_id)
 
-        # refresh file browser after saving a new file
+        # send notify and refresh file browser
+        self.notify(f"Deleted {str(deleted_path)}")
         self.query_one(FileBrowser).reload()
 
     def action_save_file(self) -> None:
@@ -429,7 +446,6 @@ class CatnipApp(App):
 
                 # remove old tab
                 self.tabbed_editor.remove_pane(document_id)
-                self.opened_tabs.remove(document_id)
 
                 # open the file browser
                 side_panel = self.query_one("#side-panel")
@@ -522,7 +538,6 @@ class CatnipApp(App):
             pass
         finally:
             self.tabbed_editor.remove_pane(tab.id)
-            self.opened_tabs.remove(tab.id)
 
     def action_quit(self) -> None:
         """
@@ -591,17 +606,17 @@ class CatnipApp(App):
         """
         Apply and save the selected app-wide theme.
         """
-
+        ConfigParser.update_config_file("app_theme", app_theme)
         self.theme = app_theme
 
-        # save theme to project config
-        ConfigParser.update_config_file("app_theme", app_theme)
-        if "key-mappings" in self.opened_tabs:
+        try:
             mappings_tab = self.tabbed_editor.get_pane("key-mappings")
             mappings_table = self.query_one("#key-mapping-table", expect_type=DataTable)
             mappings_table.clear()
             create_mapping_table(mappings_table, self.desc_key_pairs, app.get_css_variables()["accent"])
             mappings_tab.refresh()
+        except Exception:
+            pass
 
     def apply_editor_theme(self, theme: str) -> None:
         """
@@ -670,23 +685,21 @@ class CatnipApp(App):
             self.notify(f"Failed to open file: {e}", severity="error")
             return
 
-        # if tab already exists → just activate
-        if document.id in self.opened_tabs:
+        try:
+            tab = TabPane(
+                id=document.id,
+                title=document.title,
+                name=document.title,
+            )
+
+            self.tabbed_editor.add_pane(tab)
+            self.call_after_refresh(
+                lambda: self._mount_editor_for_document(tab, document)
+            )
             self.tabbed_editor.active = document.id
-            return
-
-        tab = TabPane(
-            id=document.id,
-            title=document.title,
-            name=document.title,
-        )
-
-        self.tabbed_editor.add_pane(tab)
-        self.call_after_refresh(
-            lambda: self._mount_editor_for_document(tab, document)
-        )
-        self.tabbed_editor.active = document.id
-        self.opened_tabs.append(document.id)
+        except DuplicateIds:
+            # if tab already exists → just activate
+            self.tabbed_editor.active = document.id
 
     def create_a_file(self) -> None:
         """
@@ -714,7 +727,6 @@ class CatnipApp(App):
             lambda: self._mount_editor_for_document(tab, document)
         )
         self.tabbed_editor.active = document.id
-        self.opened_tabs.append(document.id)
 
     def _mount_editor_for_document(self, tab: TabPane, document) -> None:
         text_area = Editor.code_editor(
