@@ -2,24 +2,13 @@ import hashlib
 from pathlib import Path
 from typing import Dict, Optional
 
+from features.editor.constants import LANGUAGES
 from .document import Document
 
 
 class DocumentContext:
     def __init__(self) -> None:
         self._documents: Dict[str, Document] = {}
-
-    # ---------- ID helpers ----------
-
-    def _id_from_path(self, path: Path) -> str:
-        digest = hashlib.sha1(str(path).encode()).hexdigest()[:8]
-        return f"doc-{digest}"
-
-    def _new_untitled_id(self) -> str:
-        index = len(self._documents) + 1
-        return f"doc-untitled-{index}"
-
-    """=============== Public API ==============="""
 
     def open(self, path: Path) -> Document:
         path = path.resolve()
@@ -35,7 +24,7 @@ class DocumentContext:
             title=path.name,
             path=path,
             content=content,
-            language=path.suffix.lstrip("."),
+            language=self._resolve_language(path.suffix.lstrip(".")),
             dirty=False,
         )
 
@@ -99,7 +88,7 @@ class DocumentContext:
             title=new_path.name,
             path=new_path,
             content=source.content,
-            language=new_path.suffix.lstrip("."),
+            language=self._resolve_language(new_path.suffix.lstrip(".")),
             dirty=False,
         )
 
@@ -119,3 +108,26 @@ class DocumentContext:
                 self.close(doc_id)
                 closed.append(doc_id)
         return closed
+
+    def _resolve_language(self, suffix: str) -> str:
+        """
+        Resolve file suffix to a supported Textual TextArea language.
+
+        Falls back to 'markdown' if the language is not supported.
+        """
+        try:
+            from textual.widgets import TextArea
+            supported = set(LANGUAGES)
+        except Exception:
+            supported = set()
+
+        lang = suffix.lower()
+        return lang if lang in supported else "markdown"
+
+    def _id_from_path(self, path: Path) -> str:
+        digest = hashlib.sha1(str(path).encode()).hexdigest()[:8]
+        return f"doc-{digest}"
+
+    def _new_untitled_id(self) -> str:
+        index = len(self._documents) + 1
+        return f"doc-untitled-{index}"

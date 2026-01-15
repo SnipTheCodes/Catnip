@@ -78,18 +78,19 @@ class ChatPane(TabPane):
 
     def on_key(self, event: events.Key) -> None:
         if event.key == "shift+enter":
-            if not self.text_area:
-                return
+            event.prevent_default()
+            self._send_current_message()
 
-            user_message = self.text_area.text.strip()
-            if not user_message:
-                return
+    def _send_current_message(self):
+        user_message = self.text_area.text.strip()
+        if not user_message:
+            return
 
-            if not self.get_chat_log:
-                return
+        if not self.get_chat_log:
+            return
 
-            text_log = self.get_chat_log()
-            text_log.mount(Static(user_message, classes="user-message"))
+        text_log = self.get_chat_log()
+        text_log.mount(Static(user_message, classes="user-message"))
 
-            self.text_area.clear()
-            self.run_worker(_send_message(text_log, user_message))
+        self.text_area.clear()
+        self.run_worker(_send_message(text_log, user_message))
