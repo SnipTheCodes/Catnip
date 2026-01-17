@@ -28,6 +28,5 @@ cd Catnip
 
 ### 3️⃣ Running Catnip
 ```
-catnip             # launch in terminal
-catnip web         # launch in browser
+catnip
 ```

@@ -20,4 +20,3 @@ class TopBar(Container):
                    classes="option new-file", tooltip="Ctrl+N"),
             classes="top-bar",
         )
-

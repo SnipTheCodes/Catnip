@@ -33,25 +33,4 @@ function loading_icon() {
     printf " \b\n"
 }
 
-# check if the user wants to run the web version
-if [[ "$1" == "web" ]]; then
-    # start the server silently in background
-    source "$PROJECT_DIR/.venv/bin/activate"
-    export PYTHONPATH="$PROJECT_DIR"
-
-    textual serve "python -m app.entry" >/dev/null 2>&1 &
-    SERVER_PID=$!
-
-    echo -e "\n"
-    loading_icon 2 "starting server"
-    open http://localhost:8000
-
-    echo -e "🍀 catnip web server running silently in background - press CTRL+C to stop"
-
-    # wait for ctrl+c to gracefully shut down
-    # shellcheck disable=SC2064
-    trap "kill $SERVER_PID >/dev/null 2>&1; echo -e '\nserver stopped!'; exit" INT
-    while true; do sleep 1; done
-else
-    python3 "$PROJECT_DIR/app/entry.py"
-fi
+python3 "$PROJECT_DIR/app/entry.py"
