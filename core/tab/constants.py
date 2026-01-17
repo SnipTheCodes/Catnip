@@ -1,0 +1,1 @@
+EXCEPTION_TAB_IDS = ("key-mappings", "welcome", "cat-me")

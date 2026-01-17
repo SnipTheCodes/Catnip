@@ -4,28 +4,31 @@ from typing import Optional
 from textual._node_list import DuplicateIds
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal, VerticalScroll, Vertical
-from textual.widgets import Button, Footer, Select, TextArea, TabbedContent, TabPane, Markdown, \
-    DataTable, ContentSwitcher, RichLog
-
-from core.constants import DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE, WELCOME_MESSAGE, WIDTH_SCALES, EXCEPTION_TAB_IDS, \
-    SIDE_PANEL_ID_MAPPING
+from textual.containers import Horizontal, Vertical
+from textual.widgets import Button, Footer, TextArea, TabbedContent, TabPane, Markdown, \
+    ContentSwitcher, RichLog
 from core.document.context import DocumentContext
-from core.theme import CUSTOM_APP_THEMES, APP_THEMES, EDITOR_THEMES
+from core.tab.constants import EXCEPTION_TAB_IDS
+from core.tab.lifecycle import TabLifecycle
+from core.theme import APP_THEMES, EDITOR_THEMES, CUSTOM_APP_THEMES
 from features.chat.chat_pane import ChatPane
 from features.chat.ollama_client import OllamaClient
+from features.customizer.customizer_controller import CustomizerController
 from features.customizer.customizer_panel import CustomizerPanel
-from features.editor.constants import LANGUAGES
+from features.editor.controller import EditorController
 from features.editor.editor import Editor
+from features.editor.languages import supported_languages
 from features.executor import runner
 from features.explorer.dialogs import get_dialog_handler
 from features.explorer.file_browser import FileBrowser
-from ui.top_bar import TopBar
+from features.shortcuts.shortcuts_tab import ShortcutsTab
+from ui.constants import DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE, WELCOME_MESSAGE
+from ui.layout.layout_controller import LayoutController
+from ui.sidebar.sidebar import SideBar
+from ui.topbar.top_bar import TopBar
 from utils.config_parser import ConfigParser
 from utils.editor import register_custom_editor_theme
-from utils.keymap import create_mapping_table
-from utils.screen import DEFAULT_LEFT_PANEL_WIDTH, get_side_panel_width, get_tabbed_editor_width, \
-    DEFAULT_TABBED_EDITOR_WIDTH
+from utils.screen import DEFAULT_LEFT_PANEL_WIDTH, DEFAULT_TABBED_EDITOR_WIDTH
 
 
 class CatnipApp(App):
@@ -63,22 +66,24 @@ class CatnipApp(App):
     def __init__(self) -> None:
         super().__init__()
 
-        self._init_core_state()
         self._init_config()
+        self._init_core_state()
         self._init_dialogs()
         self._init_themes()
         self._init_features()
+        self._init_layout()
 
     def _init_core_state(self) -> None:
         self.tabbed_editor = None
         self.documents = DocumentContext()
+        self.tab_lifecycle = TabLifecycle(self.documents)
         self.side_panel_width_percentage = DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE
-        self.languages = LANGUAGES
+        self.languages = supported_languages()
         self.desc_key_pairs = [(b.description, b.key) for b in self.BINDINGS]
 
     def _init_config(self) -> None:
-        self.app_theme = ConfigParser.get("app_theme", "atom_dark")
-        self.editor_theme = ConfigParser.get("editor_theme", "atom_dark")
+        self.app_theme = ConfigParser.get("app_theme", "dracula")
+        self.editor_theme = ConfigParser.get("editor_theme", "dracula")
 
     def _init_dialogs(self) -> None:
         self.dialog_handler = get_dialog_handler()
@@ -94,12 +99,15 @@ class CatnipApp(App):
             on_confirm_delete=self.dialog_handler.confirm_action,
         )
 
+        self.editor_controller = EditorController(self.documents)
+        self.customizer_controller = CustomizerController(self.app)
         self.customizer_panel = CustomizerPanel(
             APP_THEMES,
             self.app_theme,
             EDITOR_THEMES,
             self.editor_theme,
             self.languages,
+            self.customizer_controller
         )
 
         self.runner = RichLog(
@@ -109,6 +117,9 @@ class CatnipApp(App):
             id="runner-output",
             auto_scroll=True,
         )
+
+    def _init_layout(self):
+        self.layout_controller = LayoutController(self.app)
 
     def compose(self) -> ComposeResult:
         """Create the screen layout."""
@@ -127,19 +138,7 @@ class CatnipApp(App):
         yield Vertical(
             TopBar(),
             Horizontal(
-                Container(
-                    Button("📦", id="file-browser",
-                           tooltip="Show directory tree panel (Ctrl+1)"),
-                    Button("🐳", id="customizer",
-                           tooltip="Show customizer panel (Ctrl+2)"),
-                    Button("▶️", id="runner",
-                           tooltip="Runner (Ctrl+3)"),
-                    Button("🧶", id="key-mapping",
-                           tooltip="Show key mappings (Ctrl+4)"),
-                    Button("🐱", id="cat-me",
-                           tooltip="Cat me (Ctrl+Shift+C)"),
-                    classes="side-button",
-                ),
+                SideBar(),
                 ContentSwitcher(
                     self.file_browser,
                     self.customizer_panel,
@@ -171,73 +170,33 @@ class CatnipApp(App):
         """
         Handle sidebar button clicks for opening files/folders or switching panels.
         """
-        side_panel = self.query_one("#side-panel")
-        button_id = event.button.id
-        # handle file and folder opening separately
         match event.button.id:
             case "open-file":
                 self.open_file_dialog()
-                # switch to file browser panel
-                side_panel.current = "file-browser"
-                # if the side panel is hidden, show it again
-                self._enable_side_panel(side_panel)
-                return
+
             case "open-folder":
                 self.open_folder_dialog()
-                side_panel.current = "file-browser"
-                self._enable_side_panel(side_panel)
-                return
+
             case "new-file":
                 self.create_a_file()
-                side_panel.current = "customizer"
-                self._enable_side_panel(side_panel)
-                return
+
+            case "file-browser":
+                self.layout_controller.show_side_panel("file-browser")
+
+            case "customizer":
+                self.layout_controller.show_side_panel("customizer")
+
+            case "runner":
+                self.layout_controller.show_side_panel("runner-output")
+
             case "key-mapping":
                 self.action_show_shortcuts()
-                return
+
             case "cat-me":
                 self.action_open_ai_chat()
+
+            case _:
                 return
-            case "runner":
-                self.action_show_runner_panel()
-                return
-
-        if button_id in SIDE_PANEL_ID_MAPPING:
-            # switch active panel
-            side_panel.current = SIDE_PANEL_ID_MAPPING[button_id]
-            self._enable_side_panel(side_panel)
-            if side_panel.current == "file-browser":
-                # reload file browser
-                self.query_one(FileBrowser).reload()
-
-    def _enable_side_panel(self, side_panel: ContentSwitcher) -> None:
-        if not side_panel.display:
-            side_panel.display = True
-            side_panel.styles.width = DEFAULT_LEFT_PANEL_WIDTH
-            self.query_one(".tabbed-editor").styles.width = DEFAULT_TABBED_EDITOR_WIDTH
-            self.side_panel_width_percentage = DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE
-
-    def on_select_changed(self, event: Select.Changed) -> None:
-        """
-        Handle selection changes in the Customizer Panel.
-        """
-        select_id = event.select.id
-        selected_value = event.value
-
-        try:
-            if select_id == "app-theme-picker":
-                if selected_value in str(APP_THEMES):
-                    self.apply_app_theme(selected_value)
-            elif select_id == "editor-theme-picker":
-                if selected_value in str(EDITOR_THEMES):
-                    self.apply_editor_theme(selected_value)
-            elif select_id == "language-picker":
-                if selected_value in self.languages:
-                    self.apply_language(selected_value)
-            else:
-                pass
-        except TypeError:
-            pass
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         """
@@ -277,33 +236,22 @@ class CatnipApp(App):
         Start the LLM, the open or switch to the Cat Me tab.
         """
         OllamaClient.serve()
-        tab_id = "cat-me"
 
-        try:
-            # create and add the new chat tab
-            def get_chat_log() -> RichLog:
-                return self.query_one(TabbedContent).query_one("#chat-log")
+        # create and add the new chat tab
+        def get_chat_log() -> RichLog:
+            return self.query_one(TabbedContent).query_one("#chat-log")
 
-            chat_tab = ChatPane(get_chat_log=get_chat_log)
-            self.tabbed_editor.add_pane(chat_tab)
-            self.tabbed_editor.active = tab_id
-        except DuplicateIds:
-            self.tabbed_editor.active = tab_id
+        tab = ChatPane(get_chat_log=get_chat_log)
+        self._open_or_focus_tab(tab)
 
     def action_show_file_browser(self) -> None:
-        side_panel = self.query_one("#side-panel")
-        side_panel.current = "file-browser"
-        self._enable_side_panel(side_panel)
+        self.layout_controller.show_side_panel("file-browser")
 
     def action_show_customizer_panel(self) -> None:
-        side_panel = self.query_one("#side-panel")
-        side_panel.current = "customizer"
-        self._enable_side_panel(side_panel)
+        self.layout_controller.show_side_panel("customizer")
 
     def action_show_runner_panel(self) -> None:
-        side_panel = self.query_one("#side-panel")
-        side_panel.current = "runner-output"
-        self._enable_side_panel(side_panel)
+        self.layout_controller.show_side_panel("runner-output")
         runner_output = self.query_one("#side-panel").query_one("#runner-output", expect_type=RichLog)
         if not runner_output.lines:
             output = "➜ ✗ (catnip):"
@@ -313,87 +261,35 @@ class CatnipApp(App):
         """
         Open the key mappings inside a new tab in the tabbed editor.
         """
-        tab_id = "key-mappings"
-        try:
-            # create a new tab for key mappings
-            tab = TabPane(title="Shortcuts", id=tab_id)
-
-            # create a DataTable for key mappings
-            table = DataTable(id="key-mapping-table")
-            table.add_columns("Action", "Shortcut")
-            table = create_mapping_table(table, self.desc_key_pairs, app.get_css_variables()["accent"])
-
-            def mount_table():
-                """Mount the table inside the tab."""
-                tab.mount(VerticalScroll(table))
-
-            # add tab and mount content
-            self.tabbed_editor.add_pane(tab)
-            self.call_after_refresh(mount_table)
-
-            self.tabbed_editor.active = tab_id
-        except DuplicateIds:
-            self.tabbed_editor.active = tab_id
+        tab = ShortcutsTab(
+            self.desc_key_pairs,
+            app.get_css_variables()["accent"],
+        )
+        self._open_or_focus_tab(tab)
 
     def action_extend_side_panel(self) -> None:
         """
         Extend the width of the side panel.
         """
-        self._adjust_side_panel(is_reduce=False)
+        self.layout_controller.adjust_side_panel(reduce=False)
 
     def action_reduce_side_panel(self) -> None:
         """
         Reduce the width of the side panel.
         """
-        self._adjust_side_panel()
-
-    def _adjust_side_panel(self, is_reduce: bool = True) -> None:
-        """
-        Adjust the width of the left side panel.
-        """
-        side_panel = self.query_one("#side-panel")
-
-        # get the current width scale index
-        index = WIDTH_SCALES.index(self.side_panel_width_percentage)
-
-        # skip adjustment if already at boundary
-        boundary_value = min(WIDTH_SCALES) if is_reduce else max(WIDTH_SCALES)
-        if self.side_panel_width_percentage != boundary_value:
-            tabbed_editor = self.query_one(".tabbed-editor")
-
-            # calculate the next index based on the direction
-            next_index = index - 1 if is_reduce else index + 1
-            self.side_panel_width_percentage = WIDTH_SCALES[next_index]
-
-            # hide the panel if reduced to minimum, otherwise show it
-            side_panel.display = self.side_panel_width_percentage != min(WIDTH_SCALES)
-
-            # apply the new widths to side panel and the editor
-            side_panel_width = get_side_panel_width(self.side_panel_width_percentage)
-            side_panel.styles.width = side_panel_width
-            tabbed_editor.styles.width = get_tabbed_editor_width(side_panel_width)
+        self.layout_controller.adjust_side_panel()
 
     def action_hide_top_bar(self) -> None:
         """
         Hide the Top Bar.
         """
-        main_screen = self.query_one(".main-screen")
-        top_bar = self.query_one(".top-bar")
-
-        if top_bar.display:
-            top_bar.display = False
-            main_screen.add_class("expanded")
+        self.layout_controller.hide_top_bar()
 
     def action_unhide_top_bar(self) -> None:
         """
         Unhide the Top Bar.
         """
-        main_screen = self.query_one(".main-screen")
-        top_bar = self.query_one(".top-bar")
-
-        if not top_bar.display:
-            top_bar.display = True
-            main_screen.remove_class("expanded")
+        self.layout_controller.show_top_bar()
 
     def action_delete_selected_file(self) -> None:
         """
@@ -426,10 +322,7 @@ class CatnipApp(App):
         if not tab:
             return
 
-        try:
-            document = self.documents.get(tab.id)
-        except KeyError:
-            return
+        document = self.documents.try_get(tab.id)
 
         # if the document has never been saved, ask for a path
         if document.path is None:
@@ -452,16 +345,14 @@ class CatnipApp(App):
                 side_panel.current = "file-browser"
 
                 # refresh file browser after saving a new file
-                self.query_one(FileBrowser).path = str(file_path.parent)
-                self.query_one(FileBrowser).reload()
+                self._refresh_file_browser(file_path)
 
             except Exception as e:
                 print(f"Failed to save file: {str(e)}")
 
-        elif self.documents.get(document.id).dirty:
+        elif self.documents.has_unsaved_changes(document.id):
             try:
                 self.documents.save(document.id)
-                self.query_one(FileBrowser).reload()
                 self.notify(f"Saved {document.title}")
             except Exception as e:
                 self.notify(f"Failed to save file: {e}", severity="error")
@@ -482,10 +373,7 @@ class CatnipApp(App):
         if not tab:
             return
 
-        try:
-            document = self.documents.get(tab.id)
-        except KeyError:
-            return
+        document = self.documents.try_get(tab.id)
 
         new_file_path = self.dialog_handler.select_folder_save()
         if not new_file_path:
@@ -496,12 +384,16 @@ class CatnipApp(App):
             tab.title = Path(new_file_path).name
 
             # refresh file browser after saving a new file
-            self.query_one(FileBrowser).path = str(new_file_path.parent)
-            self.query_one(FileBrowser).reload()
+            self._refresh_file_browser(new_file_path)
 
             self.notify(f"Saved as {new_file_path}")
         except Exception as e:
             self.notify(f"Failed to save file: {e}", severity="error")
+
+    def _refresh_file_browser(self, path: Path) -> None:
+        browser = self.query_one(FileBrowser)
+        browser.path = str(path.parent)
+        browser.reload()
 
     def action_close_tab(self) -> None:
         """
@@ -518,26 +410,20 @@ class CatnipApp(App):
         if not tab:
             return
 
-        try:
-            document = self.documents.get(tab.id)
-            if document.dirty:
-                confirm = self.dialog_handler.confirm_action(
-                    title="Unsaved Changes",
-                    message=f"Do you want to save changes to {document.title}?"
-                )
-                if confirm:
-                    if document.path is None:
-                        file_path = self.dialog_handler.select_folder_save()
-                        if not file_path:
-                            return
-                    else:
-                        self.documents.save(document.id)
+        if self.tab_lifecycle.needs_save_prompt(tab.id):
+            name = self.tab_lifecycle.get_display_name(tab.id)
 
-            self.documents.close(document.id)
-        except KeyError:
-            pass
-        finally:
-            self.tabbed_editor.remove_pane(tab.id)
+            confirm = self.dialog_handler.confirm_action(
+                title="Unsaved Changes",
+                message=f"Do you want to save changes to {name}?"
+            )
+
+            if confirm and not self._prompt_and_save_document(self.documents.get(tab.id)):
+                return
+
+        self.tab_lifecycle.on_tab_closed(tab.id)
+        self.tabbed_editor.remove_pane(tab.id)
+        self.query_one(FileBrowser).reload()
 
     def action_quit(self) -> None:
         """
@@ -549,33 +435,50 @@ class CatnipApp(App):
 
         Non-document tabs (e.g. welcome screen, key mappings, AI chat) are ignored.
         """
-        # Iterate over open panes in reverse order (last active first)
+        # iterate over open panes in reverse order (last active first)
         for tab in reversed(list(self.tabbed_editor.query(TabPane))):
-            try:
-                document = self.documents.get(tab.id)
-            except KeyError:
-                continue
-
-            if document.dirty:
+            if self.tab_lifecycle.needs_save_prompt(tab.id):
+                name = self.tab_lifecycle.get_display_name(tab.id)
                 self.tabbed_editor.active = tab.id
+
                 confirm = self.dialog_handler.confirm_action(
                     title="Unsaved Changes",
-                    message=f"Do you want to save changes to {document.title}?",
+                    message=f"Do you want to save changes to {name}?"
                 )
-                if confirm:
-                    self.documents.save(document.id)
+                if confirm and not self._prompt_and_save_document(self.documents.get(tab.id)):
+                    return
+            self.tab_lifecycle.on_tab_closed(tab.id)
 
         self.exit()
 
+    def _prompt_and_save_document(self, document) -> bool:
+        """
+        Prompt the user to save changes for the given document.
+
+        Returns True if the document was saved successfully.
+        Returns False if the user cancelled the save flow.
+        """
+        if document.path is None:
+            file_path = self.dialog_handler.select_folder_save()
+            if not file_path:
+                return False
+
+            self.documents.save_as(document.id, file_path)
+            self.notify(f"File saved to {file_path}")
+
+            return True
+
+        self.documents.save(document.id)
+        self.notify(f"File saved!")
+
+        return True
+
     def action_run_script(self) -> None:
         """
-        Run the currently active document using the configured runner.
+        Run the currently active document using a temp file.
 
-        The active tab must represent a runnable document managed by
-        DocumentContext. The document is saved if needed, the runner panel
-        is shown, and the execution output is written to the runner log.
-
-        Non-document tabs or empty documents are ignored.
+        The document is NOT auto-saved. Unsaved changes are written to a
+        temporary file under ~/.catnip/tmp and executed from there.
         """
         file_path = self._get_runnable_file()
         if not file_path:
@@ -591,56 +494,20 @@ class CatnipApp(App):
         if not active_tab or active_tab.id in EXCEPTION_TAB_IDS:
             return None
 
-        text_area = active_tab.query_one(TextArea)
-        if not text_area.text.strip():
+        if not self.documents.is_document(active_tab.id):
             return None
 
-        return self.documents.get(active_tab.id).path
+        document = self.documents.get(active_tab.id)
+
+        if not document.content.strip():
+            return None
+
+        # write and run temp file instead of forcing save
+        return self.documents.write_temp(document.id)
 
     def _prepare_runner_ui(self) -> RichLog:
-        self.action_save_file()
         self.action_show_runner_panel()
         return self.query_one("#side-panel").query_one("#runner-output", expect_type=RichLog)
-
-    def apply_app_theme(self, app_theme: str) -> None:
-        """
-        Apply and save the selected app-wide theme.
-        """
-        ConfigParser.update_config_file("app_theme", app_theme)
-        self.theme = app_theme
-
-        try:
-            mappings_tab = self.tabbed_editor.get_pane("key-mappings")
-            mappings_table = self.query_one("#key-mapping-table", expect_type=DataTable)
-            mappings_table.clear()
-            create_mapping_table(mappings_table, self.desc_key_pairs, app.get_css_variables()["accent"])
-            mappings_tab.refresh()
-        except Exception:
-            pass
-
-    def apply_editor_theme(self, theme: str) -> None:
-        """
-        Apply the selected theme to the code editor (syntax highlighting).
-        """
-
-        for tab in self.tabbed_editor.query(TabPane):
-            if tab.query(TextArea):
-                text_area = tab.query_one(TextArea)
-                register_custom_editor_theme(text_area)
-                text_area.theme = theme
-
-        # save theme to project config and editor_theme attr
-        ConfigParser.update_config_file("editor_theme", theme)
-        self.editor_theme = theme
-
-    def apply_language(self, language: str) -> None:
-        """
-        Apply the selected language for syntax highlighting.
-        """
-        active_tab = self.tabbed_editor.active_pane
-        if active_tab and active_tab.id not in EXCEPTION_TAB_IDS:
-            text_area = active_tab.query_one(TextArea)
-            text_area.language = Editor.normalize_language(language)
 
     def open_file_dialog(self) -> None:
         """
@@ -655,6 +522,7 @@ class CatnipApp(App):
 
         file_browser = self.query_one(FileBrowser)
         file_browser.path = str(file_paths[0].parent)
+        self.layout_controller.show_side_panel("file-browser")
 
     def open_folder_dialog(self) -> None:
         """
@@ -667,6 +535,7 @@ class CatnipApp(App):
         file_browser = self.query_one(FileBrowser)
         file_browser.path = str(Path(folder_path).resolve())
         file_browser.reload()
+        self.layout_controller.show_side_panel("file-browser")
 
     def open_file_in_tab(self, file_path: Path) -> None:
         """
@@ -685,21 +554,12 @@ class CatnipApp(App):
             self.notify(f"Failed to open file: {e}", severity="error")
             return
 
-        try:
-            tab = TabPane(
-                id=document.id,
-                title=document.title,
-                name=document.title,
-            )
-
-            self.tabbed_editor.add_pane(tab)
-            self.call_after_refresh(
-                lambda: self._mount_editor_for_document(tab, document)
-            )
-            self.tabbed_editor.active = document.id
-        except DuplicateIds:
-            # if tab already exists → just activate
-            self.tabbed_editor.active = document.id
+        tab = TabPane(
+            id=document.id,
+            title=document.title,
+            name=document.title,
+        )
+        self._open_or_focus_tab(tab, document)
 
     def create_a_file(self) -> None:
         """
@@ -718,8 +578,7 @@ class CatnipApp(App):
 
         tab = TabPane(
             id=document.id,
-            title=document.title,
-            name=document.title,
+            title=document.title
         )
 
         self.tabbed_editor.add_pane(tab)
@@ -729,7 +588,9 @@ class CatnipApp(App):
         self.tabbed_editor.active = document.id
 
     def _mount_editor_for_document(self, tab: TabPane, document) -> None:
-        text_area = Editor.code_editor(
+        text_area = Editor.for_document(
+            document_id=document.id,
+            controller=self.editor_controller,
             language=document.language or "markdown",
             soft_wrap=True,
         )
@@ -738,6 +599,17 @@ class CatnipApp(App):
         text_area.load_text(document.content or "")
 
         tab.mount(text_area)
+
+    def _open_or_focus_tab(self, tab: TabPane, document: DocumentContext = None):
+        try:
+            self.tabbed_editor.add_pane(tab)
+            if document is not None:
+                self.call_after_refresh(
+                    lambda: self._mount_editor_for_document(tab, document)
+                )
+        except DuplicateIds:
+            pass
+        self.tabbed_editor.active = tab.id
 
 
 if __name__ == "__main__":

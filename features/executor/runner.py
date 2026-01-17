@@ -56,25 +56,36 @@ def run_script(file_path: str, extension: str = "js") -> None:
                     js_file.unlink()
 
         elif extension == "java":
-            class_file = file_path.with_suffix(".class")
-            class_name = file_path.stem
-
+            # compile Java source
             try:
-                subprocess.check_output(
+                compile_output = subprocess.check_output(
                     ["javac", str(file_path)],
                     stderr=subprocess.STDOUT,
                     text=True
                 )
+            except subprocess.CalledProcessError as e:
+                output = e.output
+                return output
 
+            # detect generated .class files (javac may generate multiple)
+            class_files = list(file_path.parent.glob("*.class"))
+            if not class_files:
+                return "Java compilation succeeded but no .class file was produced."
+
+            # assume main class is the first generated class
+            main_class = class_files[0].stem
+
+            try:
                 output = subprocess.check_output(
-                    ["java", "-cp", str(file_path.parent), class_name],
+                    ["java", "-cp", str(file_path.parent), main_class],
                     stderr=subprocess.STDOUT,
                     text=True
                 )
-
             finally:
-                if class_file.exists():
-                    class_file.unlink()
+                # clean up all generated .class files
+                for cf in class_files:
+                    if cf.exists():
+                        cf.unlink()
         else:
             raise ValueError(f"Unsupported script extension: {extension}")
     except subprocess.CalledProcessError as e:

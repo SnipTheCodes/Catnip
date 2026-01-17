@@ -1,16 +1,21 @@
-from pathlib import Path
-
-from pygments.lexers import get_lexer_for_filename
 from textual import events, on
 from textual.widgets import TextArea
+
+from features.editor.controller import EditorController
 
 
 class Editor(TextArea):
     """A subclass of TextArea with AI-powered autocomplete using Together AI."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(
+            self,
+            document_id: str,
+            controller: EditorController,
+            *args,
+            **kwargs):
         super().__init__(*args, **kwargs)
-        self.suggestion = ""
+        self.document_id = document_id
+        self.controller = controller
 
     def _on_key(self, event: events.Key) -> None:
         """Handles special character insertions and cancels ongoing AI requests if needed."""
@@ -20,21 +25,34 @@ class Editor(TextArea):
             self.move_cursor_relative(columns=-1)
             event.prevent_default()
 
+    @on(TextArea.Changed)
+    def on_changed(self, event: TextArea.Changed) -> None:
+        self.controller.on_editor_text_changed(
+            self.document_id,
+            event.control.text,
+        )
+
     @on(TextArea.SelectionChanged)
     def handle_selection_change(self, event: TextArea.SelectionChanged):
         if not event.selection.is_empty:
             self.action_copy()
 
-    @staticmethod
-    def get_file_language(file_path: Path, languages) -> str:
-        """Returns the programming language based on the file extension."""
-        file_extension = file_path.suffix.lower()
-        lexer = get_lexer_for_filename(file_extension)
-        language = lexer.__class__.__name__.replace("Lexer", "").lower()
-        if language == 'typescript':
-            return 'javascript'
-        else:
-            return language if language in languages else "markdown"
+    @classmethod
+    def for_document(
+            cls,
+            *,
+            document_id: str,
+            controller: EditorController,
+            language: str = "markdown",
+            **kwargs,
+    ) -> "Editor":
+        editor = cls(
+            document_id=document_id,
+            controller=controller,
+            language=language,
+            **kwargs,
+        )
+        return editor
 
     @staticmethod
     def normalize_language(language: str) -> str:

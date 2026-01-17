@@ -2,13 +2,16 @@ import hashlib
 from pathlib import Path
 from typing import Dict, Optional
 
-from features.editor.constants import LANGUAGES
+from features.editor.constants import LANGUAGE_EXTENSION_MAP
+from features.editor.languages import resolve_language
 from .document import Document
 
 
 class DocumentContext:
     def __init__(self) -> None:
         self._documents: Dict[str, Document] = {}
+        self._temp_dir = Path.home() / ".catnip/tmp"
+        self._temp_dir.mkdir(parents=True, exist_ok=True)
 
     def open(self, path: Path) -> Document:
         path = path.resolve()
@@ -24,7 +27,7 @@ class DocumentContext:
             title=path.name,
             path=path,
             content=content,
-            language=self._resolve_language(path.suffix.lstrip(".")),
+            language=resolve_language(path.suffix.lstrip(".")),
             dirty=False,
         )
 
@@ -46,13 +49,56 @@ class DocumentContext:
         self._documents[doc_id] = doc
         return doc
 
+    def get_temp_path(self, doc_id: str) -> Path:
+        """
+        Return the temp file path for a document.
+        """
+        language = self._documents[doc_id].language
+        return self._temp_dir / f"{doc_id}{self._temp_file_suffix(language)}"
+
+    def write_temp(self, doc_id: str) -> Path:
+        """
+        Write the document content to a temp file and return its path.
+        """
+        doc = self._documents[doc_id]
+        temp_path = self.get_temp_path(doc_id)
+        temp_path.write_text(doc.content, encoding="utf-8")
+        return temp_path
+
+    def remove_temp(self, doc_id: str) -> None:
+        """
+        Remove the temp file associated with the document if it exists.
+        """
+        temp_path = self.get_temp_path(doc_id)
+        if temp_path.exists():
+            temp_path.unlink()
+
     def get(self, doc_id: str) -> Document:
         return self._documents[doc_id]
+
+    def try_get(self, doc_id: str) -> Optional[Document]:
+        """
+        Return the document with the given ID, or None if it does not exist.
+        """
+        return self._documents.get(doc_id)
+
+    def is_document(self, doc_id: str) -> bool:
+        """
+        Return True if the given ID refers to a managed document.
+        """
+        return doc_id in self._documents
 
     def mark_dirty(self, doc_id: str, content: str) -> None:
         doc = self._documents[doc_id]
         doc.content = content
         doc.dirty = True
+
+    def has_unsaved_changes(self, doc_id: str) -> bool:
+        """
+        Return True if the document exists and has unsaved changes.
+        """
+        doc = self._documents.get(doc_id)
+        return bool(doc and doc.dirty)
 
     def save(self, doc_id: str, path: Optional[Path] = None) -> None:
         doc = self._documents[doc_id]
@@ -66,6 +112,7 @@ class DocumentContext:
 
         doc.path.write_text(doc.content, encoding="utf-8")
         doc.dirty = False
+        self.remove_temp(doc_id)
 
     def save_as(self, document_id: str, new_path: Path) -> Document:
         """
@@ -88,7 +135,7 @@ class DocumentContext:
             title=new_path.name,
             path=new_path,
             content=source.content,
-            language=self._resolve_language(new_path.suffix.lstrip(".")),
+            language=resolve_language(new_path.suffix.lstrip(".")),
             dirty=False,
         )
 
@@ -96,7 +143,16 @@ class DocumentContext:
         return new_doc
 
     def close(self, doc_id: str) -> None:
+        self.remove_temp(doc_id)
         self._documents.pop(doc_id, None)
+
+    def should_prompt_on_close(self, doc_id: str) -> bool:
+        """
+        Return True if closing this document should prompt the user.
+
+        A prompt is required when the document exists and has unsaved changes.
+        """
+        return self.has_unsaved_changes(doc_id)
 
     def close_by_path(self, path: Path) -> list[str]:
         """
@@ -109,21 +165,6 @@ class DocumentContext:
                 closed.append(doc_id)
         return closed
 
-    def _resolve_language(self, suffix: str) -> str:
-        """
-        Resolve file suffix to a supported Textual TextArea language.
-
-        Falls back to 'markdown' if the language is not supported.
-        """
-        try:
-            from textual.widgets import TextArea
-            supported = set(LANGUAGES)
-        except Exception:
-            supported = set()
-
-        lang = suffix.lower()
-        return lang if lang in supported else "markdown"
-
     def _id_from_path(self, path: Path) -> str:
         digest = hashlib.sha1(str(path).encode()).hexdigest()[:8]
         return f"doc-{digest}"
@@ -131,3 +172,6 @@ class DocumentContext:
     def _new_untitled_id(self) -> str:
         index = len(self._documents) + 1
         return f"doc-untitled-{index}"
+
+    def _temp_file_suffix(self, language: str) -> str:
+        return "." + LANGUAGE_EXTENSION_MAP.get(language, "tmp")
