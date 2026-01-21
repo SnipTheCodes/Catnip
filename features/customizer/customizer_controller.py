@@ -38,9 +38,11 @@ class CustomizerController:
 
         try:
             mappings_tab = self.app.tabbed_editor.get_pane("key-mappings")
-            mappings_table = self.app.query_one("#key-mapping-table", expect_type=DataTable)
+            mappings_table = self.app.query_one("#key-mapping-table",
+                                                expect_type=DataTable)
             mappings_table.clear()
-            create_mapping_table(mappings_table, self.app.desc_key_pairs, self.app.get_css_variables()["accent"])
+            create_mapping_table(mappings_table, self.app.desc_key_pairs,
+                                 self.app.get_css_variables()["accent"])
             mappings_tab.refresh()
         except Exception:
             pass

@@ -1,5 +1,3 @@
-# core/tab/lifecycle.py
-
 from core.document.context import DocumentContext
 from core.tab.constants import EXCEPTION_TAB_IDS
 

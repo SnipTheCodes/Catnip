@@ -13,9 +13,5 @@ class ShortcutsTab(TabPane):
     def on_mount(self) -> None:
         table = DataTable(id="key-mapping-table")
         table.add_columns("Action", "Shortcut")
-        create_mapping_table(
-            table,
-            self._desc_key_pairs,
-            self._accent_color,
-        )
+        create_mapping_table(table, self._desc_key_pairs, self._accent_color, )
         self.mount(VerticalScroll(table))

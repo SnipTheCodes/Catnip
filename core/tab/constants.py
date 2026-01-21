@@ -1,1 +1,5 @@
-EXCEPTION_TAB_IDS = ("key-mappings", "welcome", "cat-me")
+CAT_ME_TAB_ID = "cat-me"
+KEY_MAPPINGS_TAB_ID = "key-mappings"
+WELCOME_TAB_ID = "welcome"
+
+EXCEPTION_TAB_IDS = (CAT_ME_TAB_ID, KEY_MAPPINGS_TAB_ID, WELCOME_TAB_ID)

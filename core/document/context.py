@@ -1,9 +1,8 @@
-import hashlib
 from pathlib import Path
 from typing import Dict, Optional
 
-from features.editor.constants import LANGUAGE_EXTENSION_MAP
 from features.editor.languages import resolve_language
+from utils.tabs import id_from_path, temp_file_suffix
 from .document import Document
 
 
@@ -15,21 +14,16 @@ class DocumentContext:
 
     def open(self, path: Path) -> Document:
         path = path.resolve()
-        doc_id = self._id_from_path(path)
+        doc_id = id_from_path(path)
 
         if doc_id in self._documents:
             return self._documents[doc_id]
 
         content = path.read_text(encoding="utf-8")
 
-        doc = Document(
-            id=doc_id,
-            title=path.name,
-            path=path,
-            content=content,
-            language=resolve_language(path.suffix.lstrip(".")),
-            dirty=False,
-        )
+        doc = Document(id=doc_id, title=path.name, path=path, content=content,
+                       language=resolve_language(path.suffix.lstrip(".")),
+                       dirty=False, )
 
         self._documents[doc_id] = doc
         return doc
@@ -37,14 +31,8 @@ class DocumentContext:
     def create_untitled(self) -> Document:
         doc_id = self._new_untitled_id()
 
-        doc = Document(
-            id=doc_id,
-            title="Untitled",
-            path=None,
-            content="",
-            language="markdown",
-            dirty=False,
-        )
+        doc = Document(id=doc_id, title="Untitled", path=None, content="",
+                       language="markdown", dirty=False, )
 
         self._documents[doc_id] = doc
         return doc
@@ -54,7 +42,7 @@ class DocumentContext:
         Return the temp file path for a document.
         """
         language = self._documents[doc_id].language
-        return self._temp_dir / f"{doc_id}{self._temp_file_suffix(language)}"
+        return self._temp_dir / f"{doc_id}{temp_file_suffix(language)}"
 
     def write_temp(self, doc_id: str) -> Path:
         """
@@ -128,16 +116,12 @@ class DocumentContext:
         # write content
         new_path.write_text(source.content, encoding="utf-8")
 
-        new_doc_id = self._id_from_path(new_path)
+        new_doc_id = id_from_path(new_path)
 
-        new_doc = Document(
-            id=new_doc_id,
-            title=new_path.name,
-            path=new_path,
-            content=source.content,
-            language=resolve_language(new_path.suffix.lstrip(".")),
-            dirty=False,
-        )
+        new_doc = Document(id=new_doc_id, title=new_path.name,
+                           path=new_path, content=source.content,
+                           language=resolve_language(
+                               new_path.suffix.lstrip(".")), dirty=False, )
 
         self._documents[new_doc_id] = new_doc
         return new_doc
@@ -165,13 +149,6 @@ class DocumentContext:
                 closed.append(doc_id)
         return closed
 
-    def _id_from_path(self, path: Path) -> str:
-        digest = hashlib.sha1(str(path).encode()).hexdigest()[:8]
-        return f"doc-{digest}"
-
     def _new_untitled_id(self) -> str:
         index = len(self._documents) + 1
         return f"doc-untitled-{index}"
-
-    def _temp_file_suffix(self, language: str) -> str:
-        return "." + LANGUAGE_EXTENSION_MAP.get(language, "tmp")

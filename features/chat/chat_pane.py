@@ -3,14 +3,8 @@ from typing import Optional, Callable
 
 from textual import events
 from textual.containers import Container, VerticalScroll
-from textual.widgets import (
-    TabPane,
-    TextArea,
-    Markdown,
-    LoadingIndicator,
-    RichLog,
-    Static,
-)
+from textual.widgets import (TabPane, TextArea, Markdown, LoadingIndicator,
+                             RichLog, Static, )
 
 from .ollama_client import OllamaClient
 
@@ -43,12 +37,9 @@ async def _send_message(text_log: RichLog, user_message: str):
 class ChatPane(TabPane):
     """A chat-box for interacting with AI via Ollama."""
 
-    def __init__(
-            self,
-            title: str = "Cat Me",
-            tab_id: str = "cat-me",
-            get_chat_log: Optional[Callable[[], RichLog]] = None,
-    ):
+    def __init__(self, title: str = "Cat Me", tab_id: str = "cat-me",
+                 get_chat_log: Optional[
+                     Callable[[], RichLog]] = None, ):
         super().__init__(title=title, id=tab_id)
         self.text_area: Optional[TextArea] = None
         self.message = None
@@ -56,20 +47,10 @@ class ChatPane(TabPane):
 
     def compose(self):
         """Create the chat UI layout."""
-        yield Container(
-            VerticalScroll(
-                RichLog(
-                    id="chat-log-content",
-                    highlight=True,
-                    markup=True,
-                    wrap=True,
-                    auto_scroll=True,
-                ),
-                id="chat-log",
-            ),
-            TextArea(classes="chat-input"),
-            classes="chat-pane",
-        )
+        yield Container(VerticalScroll(
+            RichLog(id="chat-log-content", highlight=True, markup=True,
+                    wrap=True, auto_scroll=True, ), id="chat-log", ),
+                        TextArea(classes="chat-input"), classes="chat-pane", )
 
     def on_mount(self):
         """Ensure the text area is focused when the chat opens."""
