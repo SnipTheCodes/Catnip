@@ -21,12 +21,11 @@ def get_response(user_message: str) -> str:
         return "Together API key is not set. Please configure it in $HOME/.config/catnip/config.json"
     try:
         response: Any = ai.client.chat.completions.create(
-            model="meta-llama/Llama-3.3-70B-Instruct-Turbo",  # Choose best model for code
-            messages=[
-                {"role": "system",
-                 "content": "You are a concise assistant, cat vibe."},
-                {"role": "user", "content": user_message}
-            ], )
+            model="meta-llama/Llama-3.3-70B-Instruct-Turbo",
+            # Choose best model for code
+            messages=[{"role": "system",
+                       "content": "You are a concise assistant, cat vibe."},
+                      {"role": "user", "content": user_message}], )
         return response.choices[0].message.content
     except Exception as e:
         return f"Error while fetching response: {e}"

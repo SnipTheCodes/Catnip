@@ -11,19 +11,16 @@ class FileBrowser(DirectoryTree):
     ICON_NODE = "📒 "
     ICON_NODE_EXPANDED = "📒 "
 
-    def __init__(
-            self,
-            path: Union[str, Path] = "./",
-            on_open_file=None,
-            on_confirm_delete=None,
-    ) -> None:
+    def __init__(self, path: Union[str, Path] = "./", on_open_file=None,
+                 on_confirm_delete=None, ) -> None:
         super().__init__(path, id="file-browser")
         self.selected_path = None
         self.last_click_time = None
         self.on_open_file = on_open_file
         self.on_confirm_delete = on_confirm_delete
 
-    def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
+    def on_directory_tree_file_selected(self,
+                                        event: DirectoryTree.FileSelected) -> None:
         event.stop()
         current_time = datetime.now().timestamp()
         if self.last_click_time and (current_time - self.last_click_time) < 0.5:
@@ -41,13 +38,10 @@ class FileBrowser(DirectoryTree):
             return None
 
         if self.on_confirm_delete:
-            confirm = self.on_confirm_delete(
-                title="Delete Confirmation",
-                message="Are you sure you want to delete {}'{}'?".format(
-                    "folder " if self.selected_path.is_dir() else "",
-                    self.selected_path.name,
-                ),
-            )
+            confirm = self.on_confirm_delete(title="Delete Confirmation",
+                                             message="Are you sure you want to delete {}'{}'?".format(
+                                                 "folder " if self.selected_path.is_dir() else "",
+                                                 self.selected_path.name, ), )
             if not confirm:
                 return None
 

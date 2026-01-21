@@ -8,11 +8,8 @@ class ConfigParser:
     CONFIG_DIR = Path.home() / ".config" / "catnip"
     CONFIG_FILE = CONFIG_DIR / "config.json"
 
-    DEFAULT_CONFIG = {
-        "api_key": "",
-        "app_theme": "nord",
-        "editor_theme": "atom_dark"
-    }
+    DEFAULT_CONFIG = {"api_key": "", "app_theme": "nord",
+                      "editor_theme": "atom_dark"}
 
     @classmethod
     def _ensure_config_exists(cls):

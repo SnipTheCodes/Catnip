@@ -1,6 +1,14 @@
+from enum import Enum
+
 from ui.constants import WIDTH_SCALES, DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE
 from ui.sidebar.sidebar import SideBar
 from utils.screen import get_side_panel_width, get_tabbed_editor_width
+
+
+class SidePanelId(Enum):
+    FILE_BROWSER = "file-browser"
+    CUSTOMIZER = "customizer"
+    RUNNER_OUTPUT = "runner-output"
 
 
 class LayoutController:
@@ -8,9 +16,10 @@ class LayoutController:
         self.app = app
         self.side_panel_width_percentage = DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE
 
-    def show_side_panel(self, panel_id: str) -> None:
+    def show_side_panel(self, panel_id: SidePanelId) -> None:
+        # open the file browser
         side_panel = self._get_side_panel()
-        side_panel.current = panel_id
+        side_panel.current = panel_id.value
         side_panel.display = True
         self.side_panel_width_percentage = DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE
         self._apply_layout()
@@ -23,7 +32,8 @@ class LayoutController:
             self.side_panel_width_percentage = WIDTH_SCALES[next_index]
 
         side_panel = self._get_side_panel()
-        side_panel.display = self.side_panel_width_percentage != min(WIDTH_SCALES)
+        side_panel.display = self.side_panel_width_percentage != min(
+            WIDTH_SCALES)
 
         self._apply_layout()
 
@@ -47,7 +57,8 @@ class LayoutController:
             tabbed_editor.styles.width = "100%"
             return
 
-        side_panel_width = get_side_panel_width(self.side_panel_width_percentage)
+        side_panel_width = get_side_panel_width(
+            self.side_panel_width_percentage)
         side_panel.styles.width = side_panel_width
         tabbed_editor.styles.width = get_tabbed_editor_width(side_panel_width)
 

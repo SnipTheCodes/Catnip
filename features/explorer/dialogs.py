@@ -60,10 +60,11 @@ class TkinterDialogHandler(BaseDialogHandler):
         """Open a 'Save As' dialog and return the selected file path."""
         root = Tk()
         root.withdraw()
-        file_path = filedialog.asksaveasfilename(
-            defaultextension=".txt",
-            filetypes=[("All Files", "*.*"), ("Text Files", "*.txt"), ("Python Files", "*.py")]
-        )
+        file_path = filedialog.asksaveasfilename(defaultextension=".txt",
+                                                 filetypes=[
+                                                     ("All Files", "*.*"),
+                                                     ("Text Files", "*.txt"),
+                                                     ("Python Files", "*.py")])
         root.destroy()
         return file_path if file_path else None
 
@@ -78,7 +79,8 @@ class TkinterDialogHandler(BaseDialogHandler):
             return None  # user canceled
 
         # ask for filename after selecting folder
-        file_name = filedialog.asksaveasfilename(initialdir=folder_path, defaultextension=".txt")
+        file_name = filedialog.asksaveasfilename(initialdir=folder_path,
+                                                 defaultextension=".txt")
         return Path(file_name) if file_name else None
 
     def confirm_action(self, title: str, message: str) -> bool:
@@ -94,11 +96,9 @@ class ZenityDialogHandler(BaseDialogHandler):
     def select_file(self) -> Optional[list[Path]]:
         """Open a file selection dialog using Zenity and return selected file paths."""
         try:
-            result = subprocess.run(
-                ["zenity", "--file-selection", "--multiple", "--separator=,"],
-                capture_output=True,
-                text=True
-            )
+            result = subprocess.run(["zenity", "--file-selection", "--multiple",
+                                     "--separator=,"], capture_output=True,
+                                    text=True)
             if result.returncode == 0 and result.stdout.strip():
                 return [Path(file) for file in result.stdout.strip().split(",")]
         except FileNotFoundError:
@@ -110,9 +110,7 @@ class ZenityDialogHandler(BaseDialogHandler):
         try:
             result = subprocess.run(
                 ["zenity", "--file-selection", "--directory"],
-                capture_output=True,
-                text=True
-            )
+                capture_output=True, text=True)
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
         except FileNotFoundError:
@@ -122,11 +120,9 @@ class ZenityDialogHandler(BaseDialogHandler):
     def select_file_save(self) -> Optional[str]:
         """Open a 'Save As' dialog using Zenity and return the selected file path."""
         try:
-            result = subprocess.run(
-                ["zenity", "--file-selection", "--save", "--confirm-overwrite"],
-                capture_output=True,
-                text=True
-            )
+            result = subprocess.run(["zenity", "--file-selection", "--save",
+                                     "--confirm-overwrite"],
+                                    capture_output=True, text=True)
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
         except FileNotFoundError:
@@ -137,11 +133,9 @@ class ZenityDialogHandler(BaseDialogHandler):
         """Select a folder and prompt the user to enter a filename."""
         try:
             # ask user to select a folder
-            folder_result = subprocess.run(
-                ["zenity", "--file-selection", "--directory"],
-                capture_output=True,
-                text=True
-            )
+            folder_result = subprocess.run(["zenity", "--file-selection",
+                                            "--directory"], capture_output=True,
+                                           text=True)
 
             if folder_result.returncode != 0 or not folder_result.stdout.strip():
                 return None  # user canceled
@@ -150,17 +144,10 @@ class ZenityDialogHandler(BaseDialogHandler):
 
             # ask user to enter filename
             file_result = subprocess.run(
-                [
-                    "zenity", "--entry",
-                    "--title=Save File",
-                    "--text=Enter filename:",
-                    "--width=400",
-                    "--height=150",
-                    "--entry-text=example.txt"
-                ],
-                capture_output=True,
-                text=True
-            )
+                ["zenity", "--entry", "--title=Save File",
+                 "--text=Enter filename:",
+                 "--width=400", "--height=150", "--entry-text=example.txt"],
+                capture_output=True, text=True)
 
             if file_result.returncode != 0 or not file_result.stdout.strip():
                 return None  # user canceled
@@ -178,14 +165,8 @@ class ZenityDialogHandler(BaseDialogHandler):
     def confirm_action(self, title: str, message: str) -> bool:
         """Show a confirmation dialog with Yes/No options."""
         result = subprocess.run(
-            [
-                "zenity", "--question",
-                "--title", title,
-                "--text", message,
-            ],
-            capture_output=True,
-            text=True
-        )
+            ["zenity", "--question", "--title", title, "--text",
+             message, ], capture_output=True, text=True)
         return result.returncode == 0  # returns True if user clicks "Yes"
 
 
