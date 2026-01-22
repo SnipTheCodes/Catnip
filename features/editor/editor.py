@@ -35,7 +35,7 @@ class Editor(TextArea):
     def for_document(cls, *, document_id: str, controller: EditorController,
                      language: str = "markdown", **kwargs, ) -> "Editor":
         editor = cls(document_id=document_id, controller=controller,
-                     language=language, **kwargs, )
+                     language=language, show_line_numbers=True, **kwargs)
         return editor
 
     @staticmethod

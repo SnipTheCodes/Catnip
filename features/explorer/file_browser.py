@@ -13,7 +13,7 @@ class FileBrowser(DirectoryTree):
 
     def __init__(self, path: Union[str, Path] = "./", on_open_file=None,
                  on_confirm_delete=None, ) -> None:
-        super().__init__(path, id="file-browser")
+        super().__init__(path, id="file-browser", classes="file-browser")
         self.selected_path = None
         self.last_click_time = None
         self.on_open_file = on_open_file

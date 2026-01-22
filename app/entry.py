@@ -7,6 +7,7 @@ from textual.widgets import Button, Footer, TabbedContent, TabPane, Markdown, \
     ContentSwitcher, RichLog
 
 from app.workflows.file_workflow import FileWorkflow
+from config.app import AppConfig
 from core.document.context import DocumentContext
 from core.document.document import Document
 from core.tab.constants import WELCOME_TAB_ID
@@ -27,7 +28,6 @@ from ui.constants import DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE, WELCOME_MESSAGE
 from ui.layout.layout_controller import LayoutController, SidePanelId
 from ui.sidebar.sidebar import SideBar
 from ui.topbar.top_bar import TopBar
-from utils.config_parser import ConfigParser
 from utils.editor import register_custom_editor_theme, get_runnable_file
 from utils.screen import DEFAULT_LEFT_PANEL_WIDTH, DEFAULT_TABBED_EDITOR_WIDTH
 from utils.tabs import is_open
@@ -88,8 +88,9 @@ class CatnipApp(App):
         self.desc_key_pairs = [(b.description, b.key) for b in self.BINDINGS]
 
     def _init_config(self) -> None:
-        self.app_theme = ConfigParser.get("app_theme", "dracula")
-        self.editor_theme = ConfigParser.get("editor_theme", "dracula")
+        self.config = AppConfig.load()
+        self.app_theme = self.config.app_theme
+        self.editor_theme = self.config.editor_theme
 
     def _init_dialogs(self) -> None:
         self.dialog_handler = get_dialog_handler()
@@ -142,21 +143,20 @@ class CatnipApp(App):
         Add class attribute to File Browser.
         """
         self._mount_welcome_markdown()
-        self._file_browser().classes = "file-browser"
         self._side_panel().styles.width = DEFAULT_LEFT_PANEL_WIDTH
         self.query_one(TabbedContent).styles.width = DEFAULT_TABBED_EDITOR_WIDTH
 
-        if ConfigParser.load_config().get("llm_on_start"):
+        if self.config.llm_on_start:
             self._ensure_llm_running()
 
     def _ensure_llm_running(self) -> None:
         OllamaClient.serve()
 
     def _file_browser(self) -> FileBrowser:
-        return self.query_one(FileBrowser)
+        return self.query_one(".file-browser")
 
     def _runner_output(self) -> RichLog:
-        return self.query_one("#runner-output", expect_type=RichLog)
+        return self.query_one("#runner-output")
 
     def _side_panel(self):
         return self.query_one("#side-panel")
