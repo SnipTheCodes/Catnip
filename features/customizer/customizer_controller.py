@@ -1,10 +1,10 @@
 from textual.widgets import TextArea, TabPane, DataTable
 
+from config.app import AppConfig
 from core.tab.constants import EXCEPTION_TAB_IDS
 from core.theme import APP_THEMES, EDITOR_THEMES
 from features.editor.editor import Editor
 from features.editor.languages import supported_languages
-from utils.config_parser import ConfigParser
 from utils.editor import register_custom_editor_theme
 from utils.keymap import create_mapping_table
 
@@ -12,6 +12,7 @@ from utils.keymap import create_mapping_table
 class CustomizerController:
     def __init__(self, app: "CatnipApp"):
         self.app = app
+        self.config = AppConfig.load()
 
     def handle_select_change(self, select_id: str, value: str) -> None:
         """  
@@ -33,8 +34,9 @@ class CustomizerController:
         """
         Apply and save the selected app-wide theme.
         """
-        ConfigParser.update_config_file("app_theme", app_theme)
         self.app.theme = app_theme
+        self.config.app_theme = app_theme
+        self.config.save()
 
         try:
             mappings_tab = self.app.tabbed_editor.get_pane("key-mappings")
@@ -58,8 +60,9 @@ class CustomizerController:
                 text_area.theme = theme
 
         # save theme to project config and editor_theme attr
-        ConfigParser.update_config_file("editor_theme", theme)
         self.app.editor_theme = theme
+        self.config.editor_theme = theme
+        self.config.save()
 
     def apply_language(self, language: str) -> None:
         """  

@@ -54,11 +54,11 @@ class ChatPane(TabPane):
 
     def on_mount(self):
         """Ensure the text area is focused when the chat opens."""
-        self.text_area = self.query_one(TextArea)
+        self.text_area = self.query_one(".chat-input")
         self.text_area.focus()
 
     def on_key(self, event: events.Key) -> None:
-        if event.key == "shift+enter":
+        if event.key == "ctrl+enter":
             event.prevent_default()
             self._send_current_message()
 
