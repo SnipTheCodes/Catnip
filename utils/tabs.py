@@ -5,7 +5,7 @@ from typing import Union
 
 from textual.widgets import TabPane, TextArea, TabbedContent
 
-from features.editor.languages import LANGUAGE_EXTENSION_MAP
+from core.editor.languages import LANGUAGE_EXTENSION_MAP
 
 
 def get_tab_id_from_path(file_path: Union[str, Path]) -> str:

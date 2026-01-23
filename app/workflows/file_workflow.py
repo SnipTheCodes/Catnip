@@ -5,8 +5,8 @@ from textual.widgets import TabbedContent, TabPane
 
 from core.document.context import DocumentContext
 from core.document.document import Document
+from core.explorer.dialogs import BaseDialogHandler
 from core.tab.lifecycle import TabLifecycle
-from features.explorer.dialogs import BaseDialogHandler
 
 
 class FileWorkflow:

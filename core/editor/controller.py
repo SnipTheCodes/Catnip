@@ -1,4 +1,3 @@
-# features/editor/editor_controller.py
 from core.document.context import DocumentContext
 
 

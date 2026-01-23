@@ -10,6 +10,11 @@ from app.workflows.file_workflow import FileWorkflow
 from config.app import AppConfig
 from core.document.context import DocumentContext
 from core.document.document import Document
+from core.editor.controller import EditorController
+from core.editor.editor import Editor
+from core.editor.languages import supported_languages
+from core.explorer.dialogs import get_dialog_handler
+from core.explorer.file_browser import FileBrowser
 from core.tab.constants import WELCOME_TAB_ID
 from core.tab.lifecycle import TabLifecycle
 from core.theme import APP_THEMES, EDITOR_THEMES, CUSTOM_APP_THEMES
@@ -17,12 +22,7 @@ from features.chat.chat_pane import ChatPane
 from features.chat.ollama_client import OllamaClient
 from features.customizer.customizer_controller import CustomizerController
 from features.customizer.customizer_panel import CustomizerPanel
-from features.editor.controller import EditorController
-from features.editor.editor import Editor
-from features.editor.languages import supported_languages
 from features.executor import runner
-from features.explorer.dialogs import get_dialog_handler
-from features.explorer.file_browser import FileBrowser
 from features.shortcuts.shortcuts_tab import ShortcutsTab
 from ui.constants import DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE, WELCOME_MESSAGE
 from ui.layout.layout_controller import LayoutController, SidePanelId
@@ -379,6 +379,7 @@ class CatnipApp(App):
         self.file_workflow.confirm_and_close_all_tabs(self.tabbed_editor,
                                                       self.tab_lifecycle)
 
+        OllamaClient.shutdown()
         self.exit()
 
     def action_run_script(self) -> None:

@@ -3,8 +3,8 @@ from textual.widgets import TextArea, TabPane, DataTable
 from config.app import AppConfig
 from core.tab.constants import EXCEPTION_TAB_IDS
 from core.theme import APP_THEMES, EDITOR_THEMES
-from features.editor.editor import Editor
-from features.editor.languages import supported_languages
+from core.editor.editor import Editor
+from core.editor.languages import supported_languages
 from utils.editor import register_custom_editor_theme
 from utils.keymap import create_mapping_table
 

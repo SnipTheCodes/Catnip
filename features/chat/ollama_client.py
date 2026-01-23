@@ -13,13 +13,12 @@ class OllamaClient:
     def __init__(self, model: str = "llama3"):
         self.model = model
         self.url = "http://localhost:11434/api/chat"
-        self.serve()
-        atexit.register(self.shutdown)
 
     @classmethod
     def serve(cls):
         """
         Start Ollama serve if not already running.
+        This method should be called explicitly by the application.
         """
         if cls._started_pid is not None:
             return
@@ -40,10 +39,16 @@ class OllamaClient:
 
     @classmethod
     def shutdown(cls):
-        """Stop Ollama when app exits."""
-        for proc in psutil.process_iter(attrs=["pid", "name"]):
-            if "ollama" in proc.info["name"].lower():
-                proc.kill()
+        """Stop Ollama serve started by this app."""
+        if cls._started_pid is None:
+            return
+        try:
+            proc = psutil.Process(cls._started_pid)
+            proc.terminate()
+        except psutil.NoSuchProcess:
+            pass
+        finally:
+            cls._started_pid = None
 
     @staticmethod
     async def stream_response(prompt: str):
