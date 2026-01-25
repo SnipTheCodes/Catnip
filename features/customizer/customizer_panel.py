@@ -26,6 +26,7 @@ class CustomizerPanel(Container):
 
     def compose(self):
         """Create the customization panel layout."""
+
         yield Container(
             Select(options=self.app_themes, value=self.current_app_theme,
                    prompt="Select an app theme",
@@ -42,5 +43,7 @@ class CustomizerPanel(Container):
 
     @on(Select.Changed)
     def on_select_changed(self, event: Select.Changed) -> None:
+        """Notify the controller when the selection changes."""
+
         self.controller.handle_select_change(select_id=event.select.id,
                                              value=event.value, )

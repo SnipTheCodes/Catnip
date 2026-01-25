@@ -4,7 +4,7 @@ from textual.widgets import Button
 
 
 class TopBar(Container):
-    """The top bar containing file operation buttons, a spinner, and a clock."""
+    """The top bar containing file operation buttons"""
 
     def __init__(self):
         super().__init__()

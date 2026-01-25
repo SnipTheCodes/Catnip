@@ -5,6 +5,8 @@ from pathlib import Path
 
 @dataclass
 class AppConfig:
+    """Application configuration model loaded from and saved to disk."""
+
     app_theme: str = "dracula"
     editor_theme: str = "dracula"
     use_llm: bool = True
@@ -15,6 +17,8 @@ class AppConfig:
 
     @classmethod
     def load(cls) -> "AppConfig":
+        """Load configuration from disk or return defaults if missing or invalid."""
+
         cls.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
         if not cls.CONFIG_FILE.exists():
@@ -29,6 +33,8 @@ class AppConfig:
         return cls(**data)
 
     def save(self) -> None:
+        """Persist the current configuration to disk."""
+
         self.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         with open(self.CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(asdict(self), f, indent=4)

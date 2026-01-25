@@ -4,7 +4,10 @@ from textual.widgets import Button
 
 
 class SideBar(Container):
-    """The top bar containing file operation buttons, a spinner, and a clock."""
+    """
+    The sidebar containing operation buttons such as file browser, customizer,
+    runner, key mapping, and cat me.
+    """
 
     def __init__(self):
         super().__init__()
