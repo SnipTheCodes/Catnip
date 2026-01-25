@@ -1,7 +1,7 @@
 from textual import events, on
 from textual.widgets import TextArea
 
-from features.editor.controller import EditorController
+from .controller import EditorController
 
 
 class Editor(TextArea):

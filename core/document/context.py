@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Dict, Optional
 
-from features.editor.languages import resolve_language
+from core.editor.languages import resolve_language
 from utils.tabs import id_from_path, temp_file_suffix
 from .document import Document
 
