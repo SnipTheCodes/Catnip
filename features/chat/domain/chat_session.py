@@ -1,10 +1,11 @@
 from collections import deque
-from typing import Iterable
 
 from .message import Message, MessageRole
 
 
 class ChatSession:
+    """Manage a bounded in-memory chat session and build prompt context for the LLM."""
+
     MAX_MESSAGES = 50
     TRUNCATE_THRESHOLD = 30
     KEEP_AFTER_TRUNCATE = 20
@@ -31,21 +32,23 @@ class ChatSession:
     )
 
     def __init__(self) -> None:
+        """Initialize an empty chat session."""
+
         self._messages: deque[Message] = deque()
 
     def add_user_message(self, content: str) -> None:
+        """Append a new user message to the session history."""
+
         self._messages.append(Message(MessageRole.USER, content))
 
     def add_assistant_message(self, content: str) -> None:
+        """Append a new assistant response to the session history."""
+
         self._messages.append(Message(MessageRole.ASSISTANT, content))
 
-    def clear(self) -> None:
-        self._messages.clear()
-
-    def get_messages(self) -> Iterable[Message]:
-        return list(self._messages)
-
     def build_prompt(self) -> str:
+        """Build the full prompt string including system persona and message history."""
+
         self._truncate_if_needed()
 
         lines: list[str] = [f"System: {self.SYSTEM_PROMPT}"]
@@ -62,6 +65,8 @@ class ChatSession:
         return "\n".join(lines)
 
     def _truncate_if_needed(self) -> None:
+        """Truncate old messages when the session exceeds configured limits."""
+
         if len(self._messages) < self.TRUNCATE_THRESHOLD:
             return
 

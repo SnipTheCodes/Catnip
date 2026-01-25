@@ -5,6 +5,7 @@ from textual.widgets import TabbedContent
 from textual.widgets import TextArea
 
 from core.document.context import DocumentContext
+from core.editor.languages import LANGUAGE_EXTENSION_MAP
 from core.tab.constants import EXCEPTION_TAB_IDS
 from core.theme import CUSTOM_EDITOR_THEMES
 

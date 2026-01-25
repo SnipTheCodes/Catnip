@@ -1,7 +1,7 @@
-# available themes for the app
 from rich.style import Style
-from textual._text_area_theme import TextAreaTheme
 from textual.theme import BUILTIN_THEMES, Theme
+from textual.widgets import TextArea
+from textual.widgets.text_area import TextAreaTheme
 
 APP_THEMES = sorted(
     [("Catnip", "catnip")] + [(theme.replace("-", " ").title(), theme) for theme
@@ -10,9 +10,8 @@ APP_THEMES = sorted(
 
 # available themes for the editor
 EDITOR_THEMES = sorted(
-    [("Catnip", "catnip")] + [(theme.name.replace("_", " ").title(), theme.name)
-                              for theme in
-                              TextAreaTheme.builtin_themes()],
+    [("Catnip", "catnip")] + [(theme.replace("_", " ").title(), theme)
+                              for theme in list(TextArea().available_themes)],
     key=lambda x: x[0])
 
 _CATNIP = Theme(name="catnip", primary="#2980b9", secondary="#1abc9c",

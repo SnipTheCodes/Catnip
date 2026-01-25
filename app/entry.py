@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -125,6 +126,7 @@ class CatnipApp(App):
 
     def compose(self) -> ComposeResult:
         """Create the screen layout."""
+
         self.tabbed_editor = TabbedContent(classes="tabbed-editor",
                                            id="tabbed-editor")
 
@@ -139,37 +141,22 @@ class CatnipApp(App):
                        Footer(), )
 
     def on_mount(self) -> None:
-        """
-        Add class attribute to File Browser.
-        """
-        self._mount_welcome_markdown()
-        self._side_panel().styles.width = DEFAULT_LEFT_PANEL_WIDTH
-        self.query_one(TabbedContent).styles.width = DEFAULT_TABBED_EDITOR_WIDTH
+        """Add class attribute to File Browser."""
 
-        if self.config.llm_on_start:
-            self._ensure_llm_running()
-
-    def _ensure_llm_running(self) -> None:
-        OllamaClient.serve()
-
-    def _file_browser(self) -> FileBrowser:
-        return self.query_one(".file-browser")
-
-    def _runner_output(self) -> RichLog:
-        return self.query_one("#runner-output")
-
-    def _side_panel(self):
-        return self.query_one("#side-panel")
-
-    def _mount_welcome_markdown(self):
+        # mount welcome markdown
         welcome_tab = TabPane(title="Welcome", id=WELCOME_TAB_ID)
         self.tabbed_editor.add_pane(welcome_tab)
         welcome_tab.mount(Markdown(WELCOME_MESSAGE))
 
+        self.query_one("#side-panel").styles.width = DEFAULT_LEFT_PANEL_WIDTH
+        self.query_one(TabbedContent).styles.width = DEFAULT_TABBED_EDITOR_WIDTH
+
+        if self.config.llm_on_start:
+            OllamaClient.serve()
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        """
-        Handle sidebar button clicks for opening files/folders or switching panels.
-        """
+        """Handle sidebar button clicks for opening files/folders or switching panels."""
+
         match event.button.id:
             case "open-file":
                 self.open_file_dialog()
@@ -208,16 +195,6 @@ class CatnipApp(App):
     def action_new_file(self) -> None:
         self.create_a_file()
 
-    def action_open_ai_chat(self) -> None:
-        """
-        Start the LLM, the open or switch to the Cat Me tab.
-        """
-        self._ensure_llm_running()
-
-        # create and add the new chat tab
-        tab = ChatPane(get_chat_log=lambda: self.query_one(".chat-log"))
-        self._open_or_focus_tab(tab)
-
     def action_show_file_browser(self) -> None:
         self.layout_controller.show_side_panel(SidePanelId.FILE_BROWSER)
 
@@ -226,49 +203,44 @@ class CatnipApp(App):
 
     def action_show_runner_panel(self) -> None:
         self.layout_controller.show_side_panel(SidePanelId.RUNNER_OUTPUT)
-        runner_output = self._runner_output()
+        runner_output = self.query_one("#runner-output", expect_type=RichLog)
         if not runner_output.lines:
             output = "➜ ✗ (catnip):"
             runner_output.write(output)
 
     def action_show_shortcuts(self) -> None:
-        """
-        Open the key mappings inside a new tab in the tabbed editor.
-        """
+        """Open the key mappings inside a new tab in the tabbed editor."""
+
         tab = ShortcutsTab(self.desc_key_pairs,
                            app.get_css_variables()["accent"], )
         self._open_or_focus_tab(tab)
 
+    def action_open_ai_chat(self) -> None:
+        """Start the LLM, the open or switch to the Cat Me tab."""
+
+        OllamaClient.serve()
+
+        # create and add the new chat tab
+        tab = ChatPane(get_chat_log=lambda: self.query_one(".chat-log"))
+        self._open_or_focus_tab(tab)
+
     def action_extend_side_panel(self) -> None:
-        """
-        Extend the width of the side panel.
-        """
         self.layout_controller.adjust_side_panel(reduce=False)
 
     def action_reduce_side_panel(self) -> None:
-        """
-        Reduce the width of the side panel.
-        """
         self.layout_controller.adjust_side_panel()
 
     def action_hide_top_bar(self) -> None:
-        """
-        Hide the Top Bar.
-        """
         self.layout_controller.hide_top_bar()
 
     def action_unhide_top_bar(self) -> None:
-        """
-        Unhide the Top Bar.
-        """
         self.layout_controller.show_top_bar()
 
     def action_delete_selected_file(self) -> None:
-        """
-        Delete the selected file or folder and close any open document
-        associated with it.
-        """
-        deleted_path = self._file_browser().delete_selected_item()
+        """Delete the selected file or folder and close any open document associated with it."""
+
+        browser = self.query_one(".file-browser", expect_type=FileBrowser)
+        deleted_path = browser.delete_selected_item()
         if not deleted_path:
             return
 
@@ -278,7 +250,7 @@ class CatnipApp(App):
 
         # send notify and refresh file browser
         self.notify(f"Deleted {str(deleted_path)}")
-        self._file_browser().reload()
+        browser.reload()
 
     def action_save_file(self) -> None:
         """
@@ -290,41 +262,38 @@ class CatnipApp(App):
 
         Non-document tabs (e.g. welcome screen, shortcuts, AI chat) are ignored.
         """
+
         document = self._get_active_document()
 
         if document.path is None:
-            self._finalize_untitled_document(document)
+            # finalize untitled document
+            file_path = self.file_workflow.save_as(document)
+            if not file_path:
+                return
+
+            self.notify(f"File saved to {file_path}")
+
+            # replace tab for unsaved document and reload file browser
+            self.tabbed_editor.remove_pane(document.id)
+
+            self.open_file_in_tab(file_path)
+
+            self._show_file_browser_at(file_path.parent)
         else:
             self.file_workflow.save_existing_document(document)
             self.notify(f"Saved {document.title}")
 
-    def _get_active_document(self) -> Document | None:
+    def _get_active_document(self) -> Optional[Document]:
+        """Return the Document associated with the currently active tab, if any."""
         tab = self.tabbed_editor.active_pane
         if not tab:
             return None
 
         return self.documents.try_get(tab.id)
 
-    def _finalize_untitled_document(self, document: Document) -> None:
-        file_path = self.file_workflow.save_as(document)
-        if not file_path:
-            return
-
-        self.notify(f"File saved to {file_path}")
-
-        self._replace_tab_for_saved_document(document.id, file_path)
-
-        folder_path = file_path.parent
-        self._show_file_browser_at(folder_path)
-
-    def _replace_tab_for_saved_document(self, old_document_id: str,
-                                        file_path: Path) -> None:
-        self.tabbed_editor.remove_pane(old_document_id)
-
-        self.open_file_in_tab(file_path)
-
     def _show_file_browser_at(self, path: Path) -> None:
-        browser = self._file_browser()
+        """Navigate the file browser to the given path and make it visible."""
+        browser = self.query_one(".file-browser", expect_type=FileBrowser)
         browser.path = Path(path).resolve()
         browser.reload()
         self.layout_controller.show_side_panel(SidePanelId.FILE_BROWSER)
@@ -340,6 +309,7 @@ class CatnipApp(App):
 
         Non-document tabs are ignored.
         """
+
         document = self._get_active_document()
 
         file_path = self.file_workflow.save_as(document)
@@ -362,9 +332,10 @@ class CatnipApp(App):
         Tabs that do not represent documents (e.g. welcome screen, key mappings,
         AI chat) are closed immediately without any save prompt.
         """
+
         self.file_workflow.close_active_tab(self.tabbed_editor,
                                             self.tab_lifecycle)
-        self._file_browser().reload()
+        self.query_one(".file-browser", expect_type=FileBrowser).reload()
 
     def action_quit(self) -> None:
         """
@@ -376,6 +347,7 @@ class CatnipApp(App):
 
         Non-document tabs (e.g. welcome screen, key mappings, AI chat) are ignored.
         """
+
         self.file_workflow.confirm_and_close_all_tabs(self.tabbed_editor,
                                                       self.tab_lifecycle)
 
@@ -389,22 +361,21 @@ class CatnipApp(App):
         The document is NOT auto-saved. Unsaved changes are written to a
         temporary file under ~/.catnip/tmp and executed from there.
         """
+
         file_path = get_runnable_file(self.tabbed_editor, self.documents)
         if not file_path:
             return
 
-        runner_output = self._prepare_runner_ui()
+        self.action_show_runner_panel()
+        runner_output = self.query_one("#runner-output", expect_type=RichLog)
         output = runner.run_file(file_path)
         runner_output.write(f"{output}\n➜ ✗ (catnip):")
-
-    def _prepare_runner_ui(self) -> RichLog:
-        self.action_show_runner_panel()
-        return self._runner_output()
 
     def open_file_dialog(self) -> None:
         """
         Open a file selection dialog and open the selected files in editor tabs.
         """
+
         file_paths = self.dialog_handler.select_file()
         if not file_paths:
             return
@@ -419,6 +390,7 @@ class CatnipApp(App):
         """
         Open a folder selection dialog and load it into the file browser.
         """
+
         folder_path = self.dialog_handler.select_folder()
         if not folder_path:
             return
@@ -434,6 +406,7 @@ class CatnipApp(App):
         activated. Otherwise, a new editor tab is created and populated
         with the file content.
         """
+
         document = self.documents.open(file_path.resolve())
 
         tab = TabPane(id=document.id, title=document.title)
@@ -459,6 +432,8 @@ class CatnipApp(App):
         self.tabbed_editor.active = tab.id
 
     def _mount_editor_for_document(self, tab: TabPane, document) -> None:
+        """Create and mount an Editor widget for the given document inside the provided tab."""
+
         text_area = Editor.for_document(document_id=document.id,
                                         controller=self.editor_controller,
                                         language=document.language or "markdown",
@@ -472,6 +447,8 @@ class CatnipApp(App):
     def _open_or_focus_tab(self,
                            tab: TabPane,
                            document: DocumentContext = None):
+        """Open a new tab or focus an existing one, mounting an editor if a document is provided."""
+
         if not is_open(tab.id, self.tabbed_editor):
             self.tabbed_editor.add_pane(tab)
             if document is not None:

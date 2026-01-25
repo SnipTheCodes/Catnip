@@ -37,6 +37,7 @@ class TkinterDialogHandler(BaseDialogHandler):
 
     def select_file(self) -> Optional[list[Path]]:
         """Open a file selection dialog and return selected file paths."""
+
         root = Tk()
         root.withdraw()
         file_paths = filedialog.askopenfilenames()
@@ -45,6 +46,7 @@ class TkinterDialogHandler(BaseDialogHandler):
 
     def select_folder(self) -> Optional[str]:
         """Open a folder selection dialog and return the selected folder path."""
+
         root = Tk()
         root.withdraw()
         folder_path = filedialog.askdirectory()
@@ -54,6 +56,7 @@ class TkinterDialogHandler(BaseDialogHandler):
 
     def select_folder_save(self) -> Optional[str]:
         """Select a folder and prompt the user to enter a filename."""
+
         folder_path = self.select_folder()
 
         if not folder_path:
@@ -76,6 +79,7 @@ class ZenityDialogHandler(BaseDialogHandler):
 
     def select_file(self) -> Optional[list[Path]]:
         """Open a file selection dialog using Zenity and return selected file paths."""
+
         try:
             result = subprocess.run(["zenity", "--file-selection", "--multiple",
                                      "--separator=,"], capture_output=True,
@@ -88,6 +92,7 @@ class ZenityDialogHandler(BaseDialogHandler):
 
     def select_folder(self) -> Optional[str]:
         """Open a folder selection dialog using Zenity and return the selected folder path."""
+
         try:
             result = subprocess.run(
                 ["zenity", "--file-selection", "--directory"],
@@ -100,14 +105,14 @@ class ZenityDialogHandler(BaseDialogHandler):
 
     def select_folder_save(self) -> Optional[str]:
         """Select a folder and prompt the user to enter a filename."""
+
         try:
-            # ask user to select a folder
             folder_result = subprocess.run(["zenity", "--file-selection",
                                             "--directory"], capture_output=True,
                                            text=True)
 
             if folder_result.returncode != 0 or not folder_result.stdout.strip():
-                return None  # user canceled
+                return None
 
             folder_path = folder_result.stdout.strip()
 
@@ -119,7 +124,7 @@ class ZenityDialogHandler(BaseDialogHandler):
                 capture_output=True, text=True)
 
             if file_result.returncode != 0 or not file_result.stdout.strip():
-                return None  # user canceled
+                return None
 
             filename = file_result.stdout.strip()
             if "." not in filename:
@@ -133,6 +138,7 @@ class ZenityDialogHandler(BaseDialogHandler):
 
     def confirm_action(self, title: str, message: str) -> bool:
         """Show a confirmation dialog with Yes/No options."""
+
         result = subprocess.run(
             ["zenity", "--question", "--title", title, "--text",
              message, ], capture_output=True, text=True)
@@ -141,6 +147,7 @@ class ZenityDialogHandler(BaseDialogHandler):
 
 def get_dialog_handler() -> BaseDialogHandler:
     """Return the appropriate file dialog handler based on the OS."""
+
     if sys.platform.startswith("win"):
         return TkinterDialogHandler()
     else:

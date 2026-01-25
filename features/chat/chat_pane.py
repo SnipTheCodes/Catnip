@@ -24,6 +24,7 @@ class ChatPane(TabPane):
 
     def compose(self):
         """Create the chat UI layout."""
+
         yield Container(
             VerticalScroll(
                 RichLog(highlight=True, markup=True,
@@ -35,6 +36,7 @@ class ChatPane(TabPane):
 
     def on_mount(self):
         """Ensure the text area is focused when the chat opens."""
+
         self.text_area = self.query_one(".chat-input")
         self.text_area.focus()
 
@@ -45,6 +47,7 @@ class ChatPane(TabPane):
 
     async def _send_message(self, text_log: RichLog):
         """Handles sending user input to LLM and displaying the response."""
+
         try:
             loading = LoadingIndicator()
             await text_log.mount(loading)

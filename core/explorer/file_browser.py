@@ -7,6 +7,8 @@ from textual.widgets import DirectoryTree, Tree
 
 
 class FileBrowser(DirectoryTree):
+    """Directory tree widget for browsing, opening, and deleting files."""
+
     ICON_FILE = "🏷️ "
     ICON_NODE = "📒 "
     ICON_NODE_EXPANDED = "📒 "
@@ -21,6 +23,8 @@ class FileBrowser(DirectoryTree):
 
     def on_directory_tree_file_selected(self,
                                         event: DirectoryTree.FileSelected) -> None:
+        """Handle file selection and trigger open action on double-click."""
+
         event.stop()
         current_time = datetime.now().timestamp()
         if self.last_click_time and (current_time - self.last_click_time) < 0.5:
@@ -30,10 +34,14 @@ class FileBrowser(DirectoryTree):
         self.last_click_time = current_time
 
     def on_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
+        """Track the currently highlighted file or folder in the tree."""
+
         event.stop()
         self.selected_path = Path(event.node.data.path)
 
     def delete_selected_item(self) -> Path:
+        """Delete the currently selected file or folder after confirmation."""
+
         if not self.selected_path or not self.selected_path.name:
             return None
 

@@ -40,6 +40,7 @@ class OllamaClient:
     @classmethod
     def shutdown(cls):
         """Stop Ollama serve started by this app."""
+
         if cls._started_pid is None:
             return
         try:
@@ -52,6 +53,8 @@ class OllamaClient:
 
     @staticmethod
     async def stream_response(prompt: str):
+        """Run the Ollama CLI with the given prompt and yield streamed response lines."""
+
         proc = await asyncio.create_subprocess_exec("ollama", "run", "llama3",
                                                     prompt,
                                                     stdout=asyncio.subprocess.PIPE,
