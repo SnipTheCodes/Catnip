@@ -22,11 +22,6 @@ class BaseDialogHandler(ABC):
         pass
 
     @abstractmethod
-    def select_file_save(self) -> Optional[str]:
-        """Open a 'Save As' dialog and return the selected file path."""
-        pass
-
-    @abstractmethod
     def select_folder_save(self) -> Optional[str]:
         """Select a folder and prompt the user to enter a filename."""
         pass
@@ -53,30 +48,16 @@ class TkinterDialogHandler(BaseDialogHandler):
         root = Tk()
         root.withdraw()
         folder_path = filedialog.askdirectory()
+
         root.destroy()
         return folder_path if folder_path else None
 
-    def select_file_save(self) -> Optional[str]:
-        """Open a 'Save As' dialog and return the selected file path."""
-        root = Tk()
-        root.withdraw()
-        file_path = filedialog.asksaveasfilename(defaultextension=".txt",
-                                                 filetypes=[
-                                                     ("All Files", "*.*"),
-                                                     ("Text Files", "*.txt"),
-                                                     ("Python Files", "*.py")])
-        root.destroy()
-        return file_path if file_path else None
-
     def select_folder_save(self) -> Optional[str]:
         """Select a folder and prompt the user to enter a filename."""
-        root = Tk()
-        root.withdraw()
-        folder_path = filedialog.askdirectory()
-        root.destroy()
+        folder_path = self.select_folder()
 
         if not folder_path:
-            return None  # user canceled
+            return None
 
         # ask for filename after selecting folder
         file_name = filedialog.asksaveasfilename(initialdir=folder_path,
@@ -86,7 +67,7 @@ class TkinterDialogHandler(BaseDialogHandler):
     def confirm_action(self, title: str, message: str) -> bool:
         """Show a confirmation dialog with Yes/No options."""
         root = Tk()
-        root.withdraw()  # Hide the root window
+        root.withdraw()
         return messagebox.askyesno(title, message)
 
 
@@ -111,18 +92,6 @@ class ZenityDialogHandler(BaseDialogHandler):
             result = subprocess.run(
                 ["zenity", "--file-selection", "--directory"],
                 capture_output=True, text=True)
-            if result.returncode == 0 and result.stdout.strip():
-                return result.stdout.strip()
-        except FileNotFoundError:
-            print("ERROR: Zenity not found. Install it or use another method.")
-        return None
-
-    def select_file_save(self) -> Optional[str]:
-        """Open a 'Save As' dialog using Zenity and return the selected file path."""
-        try:
-            result = subprocess.run(["zenity", "--file-selection", "--save",
-                                     "--confirm-overwrite"],
-                                    capture_output=True, text=True)
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
         except FileNotFoundError:
