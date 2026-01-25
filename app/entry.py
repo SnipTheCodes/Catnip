@@ -215,7 +215,7 @@ class CatnipApp(App):
         self._ensure_llm_running()
 
         # create and add the new chat tab
-        tab = ChatPane(get_chat_log=lambda: self.query_one("#chat-log"))
+        tab = ChatPane(get_chat_log=lambda: self.query_one(".chat-log"))
         self._open_or_focus_tab(tab)
 
     def action_show_file_browser(self) -> None:

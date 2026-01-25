@@ -83,23 +83,23 @@ Button {
     align: left middle;
 }
 
-.chat-pane {
-    width: 100%;
-}
-
-.ai-message {
-    padding: 1;
-    background: $surface-lighten-1;
-}
-
 .chat-input {
     height: 5;
 }
 
 .user-message {
-    padding: 1;
+    margin: 1 2 1 1; # top right bot left
+    padding: 0 1;
     color: $primary;
-    text-align: right;
+    text-align: left;
+    width: auto;
+    max-width: 70%;
+    border: round $primary-darken-2;
+}
+
+.ai-message {
+    margin: 0 2 1 1; # top right bot left
+    padding: 0 1;
 }
 
 #key-mapping {

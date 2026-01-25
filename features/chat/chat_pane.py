@@ -4,7 +4,7 @@ from typing import Optional, Callable
 from textual import events
 from textual.containers import Container, VerticalScroll
 from textual.widgets import (TabPane, TextArea, Markdown, LoadingIndicator,
-                             RichLog, Static, )
+                             RichLog, Static)
 
 from .domain.chat_session import ChatSession
 from .ollama_client import OllamaClient
@@ -24,10 +24,14 @@ class ChatPane(TabPane):
 
     def compose(self):
         """Create the chat UI layout."""
-        yield Container(VerticalScroll(
-            RichLog(id="chat-log-content", highlight=True, markup=True,
-                    wrap=True, auto_scroll=True), id="chat-log"),
-            TextArea(classes="chat-input"), classes="chat-pane")
+        yield Container(
+            VerticalScroll(
+                RichLog(highlight=True, markup=True,
+                        wrap=True, auto_scroll=True,
+                        classes="chat-log-content"),
+                classes="chat-log"),
+            TextArea(classes="chat-input"),
+            classes="chat-pane")
 
     def on_mount(self):
         """Ensure the text area is focused when the chat opens."""
@@ -39,7 +43,7 @@ class ChatPane(TabPane):
             event.prevent_default()
             self._send_current_message()
 
-    async def _send_message(self, text_log: RichLog, user_message: str):
+    async def _send_message(self, text_log: RichLog):
         """Handles sending user input to LLM and displaying the response."""
         try:
             loading = LoadingIndicator()
@@ -79,7 +83,5 @@ class ChatPane(TabPane):
         text_log = self.get_chat_log()
         text_log.mount(Static(user_message, classes="user-message"))
 
-        self.query_one("#chat-log").scroll_end()
-
         self.text_area.clear()
-        self.run_worker(self._send_message(text_log, user_message))
+        self.run_worker(self._send_message(text_log))
