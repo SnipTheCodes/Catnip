@@ -141,9 +141,8 @@ class CatnipApp(App):
                        Footer(), )
 
     def on_mount(self) -> None:
-        """Add class attribute to File Browser."""
+        """Mount Welcome tab, set main component's width, and start LLM, if applicable."""
 
-        # mount welcome markdown
         welcome_tab = TabPane(title="Welcome", id=WELCOME_TAB_ID)
         self.tabbed_editor.add_pane(welcome_tab)
         welcome_tab.mount(Markdown(WELCOME_MESSAGE))
@@ -155,7 +154,7 @@ class CatnipApp(App):
             OllamaClient.serve()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle sidebar button clicks for opening files/folders or switching panels."""
+        """Handle button clicks for opening files/folders or switching panels."""
 
         match event.button.id:
             case "open-file":
@@ -216,12 +215,12 @@ class CatnipApp(App):
         self._open_or_focus_tab(tab)
 
     def action_open_ai_chat(self) -> None:
-        """Start the LLM, the open or switch to the Cat Me tab."""
+        """Start the LLM, then create/switch to the Cat Me tab."""
 
         OllamaClient.serve()
 
         # create and add the new chat tab
-        tab = ChatPane(get_chat_log=lambda: self.query_one(".chat-log"))
+        tab = ChatPane()
         self._open_or_focus_tab(tab)
 
     def action_extend_side_panel(self) -> None:
@@ -285,6 +284,7 @@ class CatnipApp(App):
 
     def _get_active_document(self) -> Optional[Document]:
         """Return the Document associated with the currently active tab, if any."""
+
         tab = self.tabbed_editor.active_pane
         if not tab:
             return None
@@ -293,6 +293,7 @@ class CatnipApp(App):
 
     def _show_file_browser_at(self, path: Path) -> None:
         """Navigate the file browser to the given path and make it visible."""
+
         browser = self.query_one(".file-browser", expect_type=FileBrowser)
         browser.path = Path(path).resolve()
         browser.reload()
@@ -372,9 +373,7 @@ class CatnipApp(App):
         runner_output.write(f"{output}\n➜ ✗ (catnip):")
 
     def open_file_dialog(self) -> None:
-        """
-        Open a file selection dialog and open the selected files in editor tabs.
-        """
+        """Open a file selection dialog and open the selected files in editor tabs."""
 
         file_paths = self.dialog_handler.select_file()
         if not file_paths:
@@ -387,9 +386,7 @@ class CatnipApp(App):
         self._show_file_browser_at(folder_path)
 
     def open_folder_dialog(self) -> None:
-        """
-        Open a folder selection dialog and load it into the file browser.
-        """
+        """Open a folder selection dialog and load it into the file browser."""
 
         folder_path = self.dialog_handler.select_folder()
         if not folder_path:
