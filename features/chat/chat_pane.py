@@ -1,10 +1,10 @@
 import asyncio
-from typing import Optional, Callable
+from typing import Optional
 
 from textual import events
-from textual.containers import Container, VerticalScroll
+from textual.containers import Vertical, VerticalScroll
 from textual.widgets import (TabPane, TextArea, Markdown, LoadingIndicator,
-                             RichLog, Static)
+                             Static)
 
 from .domain.chat_session import ChatSession
 from .ollama_client import OllamaClient
@@ -13,24 +13,17 @@ from .ollama_client import OllamaClient
 class ChatPane(TabPane):
     """A chat-box for interacting with AI via Ollama."""
 
-    def __init__(self, title: str = "Cat Me", tab_id: str = "cat-me",
-                 get_chat_log: Optional[
-                     Callable[[], RichLog]] = None, ):
+    def __init__(self, title: str = "Cat Me", tab_id: str = "cat-me"):
         super().__init__(title=title, id=tab_id)
         self.text_area: Optional[TextArea] = None
         self.message = None
-        self.get_chat_log = get_chat_log
         self.chat_session = ChatSession()
 
     def compose(self):
         """Create the chat UI layout."""
 
-        yield Container(
-            VerticalScroll(
-                RichLog(highlight=True, markup=True,
-                        wrap=True, auto_scroll=True,
-                        classes="chat-log-content"),
-                classes="chat-log"),
+        yield Vertical(
+            VerticalScroll(classes="chat-log"),
             TextArea(classes="chat-input"),
             classes="chat-pane")
 
@@ -41,12 +34,15 @@ class ChatPane(TabPane):
         self.text_area.focus()
 
     def on_key(self, event: events.Key) -> None:
+        """Submit message when user presses ctrl+enter."""
+
         if event.key == "ctrl+enter":
             event.prevent_default()
-            self._send_current_message()
+            text_log = self.query_one(".chat-log")
+            self._send_current_message(text_log)
 
-    async def _send_message(self, text_log: RichLog):
-        """Handles sending user input to LLM and displaying the response."""
+    async def _send_message(self, text_log: VerticalScroll):
+        """Handle sending user input to LLM and displaying the response."""
 
         try:
             loading = LoadingIndicator()
@@ -73,17 +69,13 @@ class ChatPane(TabPane):
         except Exception as e:
             await text_log.mount(Static(str(e), classes="ai-message"))
 
-    def _send_current_message(self):
+    def _send_current_message(self, text_log: VerticalScroll):
         user_message = self.text_area.text.strip()
         if not user_message:
             return
 
-        if not self.get_chat_log:
-            return
-
         self.chat_session.add_user_message(user_message)
 
-        text_log = self.get_chat_log()
         text_log.mount(Static(user_message, classes="user-message"))
 
         self.text_area.clear()

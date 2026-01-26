@@ -30,19 +30,19 @@ Button {
 
 .open-folder {
     background: $primary;
-    border-bottom: hkey  $primary-darken-3;
+    border-bottom: hkey $primary-darken-3;
     border-top: hkey $primary-lighten-3;
 }
     
 .open-file {
     background: $warning;
-    border-bottom: hkey  $warning-darken-3;
+    border-bottom: hkey $warning-darken-3;
     border-top: hkey $warning-lighten-3;
 }
 
 .new-file {
     background: $error;
-    border-bottom: hkey  $error-darken-3;
+    border-bottom: hkey $error-darken-3;
     border-top: hkey $error-lighten-3;
 }
 
@@ -61,8 +61,8 @@ Button {
 
 .side-button {
     layout: grid;
-    width: 4;
-    height: 15;
+    min-width: 4;
+    height: auto;
     text-align: left;
 }
 
@@ -83,12 +83,16 @@ Button {
     align: left middle;
 }
 
-.chat-input {
-    height: 5;
+.chat-pane{
+    margin: 0 1;
+}
+
+.chat-log {
+    align: left top;
+    padding: 0 1;
 }
 
 .user-message {
-    margin: 1 2 1 1; # top right bot left
     padding: 0 1;
     color: $primary;
     text-align: left;
@@ -98,8 +102,12 @@ Button {
 }
 
 .ai-message {
-    margin: 0 2 1 1; # top right bot left
-    padding: 0 1;
+    padding-top: 1;
+}
+
+.chat-input {
+    height: 5;
+    align: center bottom;
 }
 
 #key-mapping {

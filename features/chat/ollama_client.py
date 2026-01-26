@@ -1,5 +1,4 @@
 import asyncio
-import atexit
 import socket
 import subprocess
 import time
@@ -60,4 +59,4 @@ class OllamaClient:
                                                     stdout=asyncio.subprocess.PIPE,
                                                     stderr=asyncio.subprocess.PIPE, )
         async for line in proc.stdout:
-            yield line.decode("utf-8", errors="ignore")
+            yield line.decode("utf-8", errors="replace")
