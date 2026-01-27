@@ -7,7 +7,13 @@ from .controller import EditorController
 
 
 class Editor(TextArea):
-    """A subclass of TextArea with AI-powered autocomplete using Together AI."""
+    """
+    Text editor widget bound to a document and coordinated by an EditorController.
+
+    This class extends TextArea with editor-specific behaviors such as paired
+    character insertion, selection handling, and change notifications that
+    propagate updates to the document model.
+    """
 
     def __init__(self, document_id: str, controller: EditorController, *args,
                  **kwargs):

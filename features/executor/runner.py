@@ -1,77 +1,78 @@
 import subprocess
 from pathlib import Path
+from typing import Callable
 
-RUNNER_SUPPORTED_LANGUAGES = {"py": "Python", "js": "JavaScript",
-                              "ts": "TypeScript", "java": "Java", }
+from utils.editor import RunnableLanguage
 
 
 def run_file(file_path: Path) -> str:
-    """Run a file if supported and return output text."""
+    """Run the given file using the appropriate language runner based on its extension."""
 
-    extension = file_path.suffix.lstrip(".")
+    ext: RunnableLanguage = RunnableLanguage(file_path.suffix.lstrip("."))
+    return LANGUAGE_RUNNERS[ext](file_path)
 
-    if extension not in RUNNER_SUPPORTED_LANGUAGES:
-        raise ValueError(f"Unsupported script extension: {extension}")
+
+def run_python(file_path: Path) -> str:
+    return subprocess.check_output(["python3", str(file_path)],
+                                   stderr=subprocess.STDOUT,
+                                   text=True)
+
+
+def run_javascript(file_path: Path) -> str:
+    return subprocess.check_output(["node", str(file_path)],
+                                   stderr=subprocess.STDOUT,
+                                   text=True)
+
+
+def run_typescript(file_path: Path) -> str:
+    js_file = file_path.with_suffix(".js")
 
     try:
-        if extension == "py":
-            output = subprocess.check_output(["python3", str(file_path)],
-                                             stderr=subprocess.STDOUT,
-                                             text=True)
+        subprocess.check_output(["tsc", str(file_path)],
+                                stderr=subprocess.STDOUT, text=True)
 
-        elif extension == "js":
-            output = subprocess.check_output(["node", str(file_path)],
-                                             stderr=subprocess.STDOUT,
-                                             text=True)
+        return subprocess.check_output(["node",
+                                        str(js_file)],
+                                       cwd=file_path.parent,
+                                       stderr=subprocess.STDOUT,
+                                       text=True)
 
-        elif extension == "ts":
-            js_file = file_path.with_suffix(".js")
+    finally:
+        if js_file.exists():
+            js_file.unlink()
 
-            try:
-                subprocess.check_output(["tsc", str(file_path)],
-                                        stderr=subprocess.STDOUT, text=True)
 
-                output = subprocess.check_output(["node",
-                                                  str(js_file)],
-                                                 cwd=file_path.parent,
-                                                 stderr=subprocess.STDOUT,
-                                                 text=True)
+def run_java(file_path: Path) -> str:
+    # compile Java source
+    subprocess.check_output(
+        ["javac", str(file_path)],
+        stderr=subprocess.STDOUT,
+        text=True)
 
-            finally:
-                if js_file.exists():
-                    js_file.unlink()
+    # detect generated .class files (javac may generate multiple)
+    class_files = list(file_path.parent.glob("*.class"))
+    if not class_files:
+        return "Java compilation succeeded but no .class file was produced."
 
-        elif extension == "java":
-            # compile Java source
-            try:
-                subprocess.check_output(
-                    ["javac", str(file_path)],
-                    stderr=subprocess.STDOUT,
-                    text=True)
-            except subprocess.CalledProcessError as e:
-                output = e.output
-                return output
+    # assume main class is the first generated class
+    main_class = class_files[0].stem
 
-            # detect generated .class files (javac may generate multiple)
-            class_files = list(file_path.parent.glob("*.class"))
-            if not class_files:
-                return "Java compilation succeeded but no .class file was produced."
+    try:
+        return subprocess.check_output(
+            ["java", "-cp", str(file_path.parent),
+             main_class], stderr=subprocess.STDOUT, text=True)
+    finally:
+        # clean up all generated .class files
+        for cf in class_files:
+            if cf.exists():
+                cf.unlink()
 
-            # assume main class is the first generated class
-            main_class = class_files[0].stem
 
-            try:
-                output = subprocess.check_output(
-                    ["java", "-cp", str(file_path.parent),
-                     main_class], stderr=subprocess.STDOUT, text=True)
-            finally:
-                # clean up all generated .class files
-                for cf in class_files:
-                    if cf.exists():
-                        cf.unlink()
-        else:
-            raise ValueError(f"Unsupported script extension: {extension}")
-    except subprocess.CalledProcessError as e:
-        output = e.output
+Runner = Callable[[Path], str]
 
-    return output
+LANGUAGE_RUNNERS: dict[RunnableLanguage, Runner] = {
+    RunnableLanguage.PY: run_python,
+    RunnableLanguage.JS: run_javascript,
+    RunnableLanguage.TS: run_typescript,
+    RunnableLanguage.JAVA: run_java,
+}

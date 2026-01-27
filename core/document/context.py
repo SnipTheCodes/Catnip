@@ -7,6 +7,15 @@ from .document import Document
 
 
 class DocumentContext:
+    """
+    Manage the lifecycle of open documents and their temporary execution files.
+
+    This class is responsible for opening, creating, saving, and closing documents,
+    as well as maintaining temporary files used for running unsaved content. It acts
+    as the in-memory registry for all currently open documents and centralizes
+    document-related state and operations.
+    """
+
     def __init__(self) -> None:
         self._documents: Dict[str, Document] = {}
         self._temp_dir = Path.home() / ".catnip/tmp"

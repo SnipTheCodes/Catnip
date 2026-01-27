@@ -29,7 +29,7 @@ from ui.constants import DEFAULT_SIDE_PANEL_WIDTH_PERCENTAGE, WELCOME_MESSAGE
 from ui.layout.layout_controller import LayoutController, SidePanelId
 from ui.sidebar.sidebar import SideBar
 from ui.topbar.top_bar import TopBar
-from utils.editor import register_custom_editor_theme, get_runnable_file
+from utils.editor import register_custom_editor_theme, prepare_runnable_file
 from utils.screen import DEFAULT_LEFT_PANEL_WIDTH, DEFAULT_TABBED_EDITOR_WIDTH
 from utils.tabs import is_open
 
@@ -349,8 +349,8 @@ class CatnipApp(App):
         Non-document tabs (e.g. welcome screen, key mappings, AI chat) are ignored.
         """
 
-        self.file_workflow.confirm_and_close_all_tabs(self.tabbed_editor,
-                                                      self.tab_lifecycle)
+        self.file_workflow.prompt_to_save_all_before_exit(self.tabbed_editor,
+                                                          self.tab_lifecycle)
 
         OllamaClient.shutdown()
         self.exit()
@@ -363,7 +363,7 @@ class CatnipApp(App):
         temporary file under ~/.catnip/tmp and executed from there.
         """
 
-        file_path = get_runnable_file(self.tabbed_editor, self.documents)
+        file_path = prepare_runnable_file(self.tabbed_editor, self.documents)
         if not file_path:
             return
 
