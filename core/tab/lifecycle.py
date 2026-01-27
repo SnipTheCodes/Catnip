@@ -18,6 +18,7 @@ class TabLifecycle:
 
     def needs_save_prompt(self, tab_id: str) -> bool:
         """Return True if closing this tab should prompt the user to save."""
+
         if tab_id in EXCEPTION_TAB_IDS:
             return False
 
