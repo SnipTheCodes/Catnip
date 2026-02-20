@@ -1,6 +1,6 @@
 # 🍀 Catnip
 ## A terminal-based, Textual-powered file browser and more.
-<img width="1082" height="795" alt="Screenshot 2025-08-13 at 22 44 30" src="https://github.com/user-attachments/assets/d0aee969-a944-4284-9ec9-8bd4d896dd94" />
+<img width="1082" height="799" alt="catnip-theme" src="https://github.com/user-attachments/assets/cf51caa6-9942-41a2-ba46-20c5ef089071" />
 
 ## 🌱 About this project
 Catnip is **not just an app** — it is my personal journey of becoming a self‑learning software developer.
