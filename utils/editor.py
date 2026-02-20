@@ -59,7 +59,14 @@ def prepare_runnable_file(tabbed_editor: TabbedContent,
     if not document.content.strip():
         return None
 
-    if document.path.suffix.lstrip(".") not in RunnableLanguage:
+    suffix = (
+        document.path.suffix.lstrip(".")
+        if document.path
+        else document.language
+    )
+    try:
+        RunnableLanguage(suffix)
+    except ValueError:
         return None
 
     # write and run temp file instead of forcing save

@@ -1,7 +1,7 @@
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
 
 from textual.widgets import DirectoryTree, Tree
 
@@ -39,7 +39,7 @@ class FileBrowser(DirectoryTree):
         event.stop()
         self.selected_path = Path(event.node.data.path)
 
-    def delete_selected_item(self) -> Path:
+    def delete_selected_item(self) -> Optional[Path]:
         """Delete the currently selected file or folder after confirmation."""
 
         if not self.selected_path or not self.selected_path.name:
@@ -62,3 +62,4 @@ class FileBrowser(DirectoryTree):
             return self.selected_path
         except Exception as e:
             self.notify(f"Error deleting file: {e}", severity="error")
+            return None

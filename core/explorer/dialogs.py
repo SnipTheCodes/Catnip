@@ -22,13 +22,13 @@ class BaseDialogHandler(ABC):
         pass
 
     @abstractmethod
-    def select_folder_save(self) -> Optional[str]:
-        """Select a folder and prompt the user to enter a filename."""
+    def select_folder_save(self) -> Optional[Path]:
+        """Select a save location and return the chosen file path, or None if cancelled."""
         pass
 
     @abstractmethod
     def confirm_action(self, title: str, message: str) -> bool:
-        """Select a folder and prompt the user to enter a filename."""
+        """Show a confirmation dialog; return True if the user confirms."""
         pass
 
 
@@ -54,7 +54,7 @@ class TkinterDialogHandler(BaseDialogHandler):
         root.destroy()
         return folder_path if folder_path else None
 
-    def select_folder_save(self) -> Optional[str]:
+    def select_folder_save(self) -> Optional[Path]:
         """Select a folder and prompt the user to enter a filename."""
 
         folder_path = self.select_folder()
@@ -103,7 +103,7 @@ class ZenityDialogHandler(BaseDialogHandler):
             print("ERROR: Zenity not found. Install it or use another method.")
         return None
 
-    def select_folder_save(self) -> Optional[str]:
+    def select_folder_save(self) -> Optional[Path]:
         """Select a folder and prompt the user to enter a filename."""
 
         try:

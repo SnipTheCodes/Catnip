@@ -115,7 +115,7 @@ class DocumentContext:
         doc.dirty = False
         self.remove_temp(doc_id)
 
-    def save_as(self, document_id: str, new_path: Path) -> Document:
+    def save_to(self, document_id: str, new_path: Path) -> Document:
         """Save a document to a new file path and return a new document instance."""
 
         source = self._documents.get(document_id)
