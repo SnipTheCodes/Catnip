@@ -211,7 +211,7 @@ class CatnipApp(App):
         """Open the key mappings inside a new tab in the tabbed editor."""
 
         tab = ShortcutsTab(self.desc_key_pairs,
-                           app.get_css_variables()["accent"], )
+                           self.get_css_variables()["accent"], )
         self._open_or_focus_tab(tab)
 
     def action_open_ai_chat(self) -> None:
@@ -270,8 +270,6 @@ class CatnipApp(App):
             if not file_path:
                 return
 
-            self.notify(f"File saved to {file_path}")
-
             # replace tab for unsaved document and reload file browser
             self.tabbed_editor.remove_pane(document.id)
 
@@ -279,8 +277,7 @@ class CatnipApp(App):
 
             self._show_file_browser_at(file_path.parent)
         else:
-            self.file_workflow.save_existing_document(document)
-            self.notify(f"Saved {document.title}")
+            self.file_workflow.save_on_dirty(document)
 
     def _get_active_document(self) -> Optional[Document]:
         """Return the Document associated with the currently active tab, if any."""
@@ -443,7 +440,7 @@ class CatnipApp(App):
 
     def _open_or_focus_tab(self,
                            tab: TabPane,
-                           document: DocumentContext = None):
+                           document: Optional[Document] = None) -> None:
         """Open a new tab or focus an existing one, mounting an editor if a document is provided."""
 
         if not is_open(tab.id, self.tabbed_editor):

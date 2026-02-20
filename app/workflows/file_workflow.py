@@ -29,32 +29,6 @@ class FileWorkflow:
         self.dialogs = dialogs
         self.notify = notify
 
-    def prompt_and_save(self, document: Document) -> bool:
-        """
-        Prompt the user to save the given document if needed and perform the save.
-
-        If the document has no associated file path, this method asks the user to
-        choose a destination and saves the document there. Otherwise, it saves
-        the document to its existing path.
-
-        Returns:
-            True if the document was saved successfully;
-            False if the user cancelled the save operation.
-        """
-
-        if document.path is None:
-            file_path = self.dialogs.select_folder_save()
-            if not file_path:
-                return False
-
-            self.documents.save_as(document.id, file_path)
-            self.notify(f"File saved to {file_path}")
-            return True
-
-        self.documents.save(document.id)
-        self.notify("File saved!")
-        return True
-
     def close_active_tab(self, editor: TabbedContent,
                          tab_lifecycle: TabLifecycle) -> None:
         """Close the currently active tab, prompting to save if there are unsaved changes."""
@@ -63,10 +37,10 @@ class FileWorkflow:
         if not active_tab:
             return
 
-        if not self._confirm_and_maybe_save_tab(active_tab.id, tab_lifecycle):
-            return
+        self.prompt_save_on_dirty(active_tab.id, tab_lifecycle)
 
         tab_lifecycle.on_tab_closed(active_tab.id)
+
         editor.remove_pane(active_tab.id)
 
     def prompt_to_save_all_before_exit(self, editor: TabbedContent,
@@ -82,21 +56,20 @@ class FileWorkflow:
         handled first.
         """
         for tab in reversed(list(editor.query(TabPane))):
-            editor.active = tab.id
-            if not self._confirm_and_maybe_save_tab(tab.id, tab_lifecycle):
-                return
+            editor.active = tab.id  # switch tab
+            self.prompt_save_on_dirty(tab.id, tab_lifecycle)
 
-    def _confirm_and_maybe_save_tab(self, tab_id: str,
-                                    tab_lifecycle: TabLifecycle) -> bool:
+    def prompt_save_on_dirty(self, tab_id: str,
+                             tab_lifecycle: TabLifecycle) -> None:
         """
-        Prompt to save the document for the given tab if it has unsaved changes.
+        Prompt the user to save the document for the given tab if it has unsaved changes.
 
-        Returns:
-            True if it is safe to proceed (no unsaved changes or save succeeded);
-            False if the user cancelled the save operation.
+        If the tab corresponds to a document with unsaved changes, the user is
+        asked whether to save it. When confirmed, the document is saved, opening
+        a file selection dialog only if the document does not yet have a path.
         """
         if not tab_lifecycle.needs_save_prompt(tab_id):
-            return True
+            return
 
         name = tab_lifecycle.get_display_name(tab_id)
 
@@ -105,23 +78,38 @@ class FileWorkflow:
             message=f"Do you want to save changes to {name}?"
         )
 
-        if confirm and not self.prompt_and_save(self.documents.get(tab_id)):
-            return False
+        if not confirm:
+            return
 
-        return True
+        document = self.documents.get(tab_id)
 
-    def save_existing_document(self, document: Document) -> None:
-        """
-        Save the given document only if it has unsaved changes.
+        if document.path is None:
+            file_path = self.dialogs.select_folder_save()
+            if not file_path:
+                return
 
-        This method performs no action if the document is already in a clean
-        state, avoiding unnecessary writes.
-        """
-
-        if not self.documents.has_unsaved_changes(document.id):
+            self.documents.save_to(document.id, file_path)
+            self.documents.close(document.id)
+            self.notify(f"File saved to {file_path}")
             return
 
         self.documents.save(document.id)
+        self.notify(f"Saved {document.title}")
+
+    def save_on_dirty(self, document: Document) -> None:
+        """
+        Save the given document if it has unsaved changes.
+
+        This method unconditionally writes the document to its current path
+        when it is dirty, and does nothing if the document is already clean.
+        """
+
+        if not self.documents.has_unsaved_changes(document.id):
+            self.notify("Already up to date")
+            return
+
+        self.documents.save(document.id)
+        self.notify(f"Saved {document.title}")
 
     def save_as(self, document: Document) -> Optional[Path]:
         """
@@ -137,5 +125,7 @@ class FileWorkflow:
         if not file_path:
             return None
 
-        self.documents.save_as(document.id, file_path)
+        self.documents.save_to(document.id, file_path)
+        self.notify(f"File saved to {file_path}")
+
         return file_path
