@@ -13,24 +13,33 @@ def run_file(file_path: Path) -> str:
 
 
 def run_python(file_path: Path) -> str:
-    return subprocess.check_output(["python3", str(file_path)],
-                                   stderr=subprocess.STDOUT,
-                                   text=True)
+    try:
+        return subprocess.check_output(["python3", str(file_path)],
+                                       stderr=subprocess.STDOUT,
+                                       text=True)
+    except subprocess.CalledProcessError as error:
+                return error.output
 
 
 def run_javascript(file_path: Path) -> str:
-    return subprocess.check_output(["node", str(file_path)],
-                                   stderr=subprocess.STDOUT,
-                                   text=True)
+    try:
+        return subprocess.check_output(["node", str(file_path)],
+                                       stderr=subprocess.STDOUT,
+                                       text=True)
+    except subprocess.CalledProcessError as error:
+        return error.output
 
 
 def run_typescript(file_path: Path) -> str:
     js_file = file_path.with_suffix(".js")
 
     try:
-        subprocess.check_output(["tsc", str(file_path)],
-                                stderr=subprocess.STDOUT, text=True)
-
+        try:
+            subprocess.check_output(["tsc", str(file_path)],
+                                    stderr=subprocess.STDOUT, text=True)
+        except subprocess.CalledProcessError as error:
+            return error.output
+            
         return subprocess.check_output(["node",
                                         str(js_file)],
                                        cwd=file_path.parent,
@@ -43,11 +52,14 @@ def run_typescript(file_path: Path) -> str:
 
 
 def run_java(file_path: Path) -> str:
-    # compile Java source
-    subprocess.check_output(
-        ["javac", str(file_path)],
-        stderr=subprocess.STDOUT,
-        text=True)
+    try:
+        # compile Java source
+        subprocess.check_output(
+            ["javac", str(file_path)],
+            stderr=subprocess.STDOUT,
+            text=True)
+    except subprocess.CalledProcessError as error:
+        return error.output
 
     # detect generated .class files (javac may generate multiple)
     class_files = list(file_path.parent.glob("*.class"))

@@ -54,9 +54,13 @@ class DocumentContext:
     def get_temp_path(self, doc_id: str) -> Path:
         """Return the temp file path for the given document."""
 
-        language = self._documents[doc_id].language
-        file_suffix = f".{LANGUAGE_EXTENSION_MAP.get(language, "tmp")}"
-
+        document = self._documents[doc_id]
+        
+        file_suffix = (
+            document.path.suffix
+            if document.path
+            else f".{LANGUAGE_EXTENSION_MAP.get(document.language, 'tmp')}"
+        )
         return self._temp_dir / f"{doc_id}{file_suffix}"
 
     def write_temp(self, doc_id: str) -> Path:
