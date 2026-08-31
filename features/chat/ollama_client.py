@@ -9,7 +9,7 @@ import psutil
 class OllamaClient:
     _started_pid = None
 
-    def __init__(self, model: str = "llama3"):
+    def __init__(self, model: str = "qwen3:8b"):
         self.model = model
         self.url = "http://localhost:11434/api/chat"
 
@@ -54,7 +54,7 @@ class OllamaClient:
     async def stream_response(prompt: str):
         """Run the Ollama CLI with the given prompt and yield streamed response lines."""
 
-        proc = await asyncio.create_subprocess_exec("ollama", "run", "llama3",
+        proc = await asyncio.create_subprocess_exec("ollama", "run", "qwen3:8b",
                                                     prompt,
                                                     stdout=asyncio.subprocess.PIPE,
                                                     stderr=asyncio.subprocess.PIPE, )

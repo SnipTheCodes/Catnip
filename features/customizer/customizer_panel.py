@@ -1,6 +1,6 @@
 from textual import on
 from textual.containers import Container
-from textual.widgets import Select
+from textual.widgets import Select, Label
 
 from features.customizer.customizer_controller import CustomizerController
 
@@ -28,16 +28,16 @@ class CustomizerPanel(Container):
         """Create the customization panel layout."""
 
         yield Container(
+            Label("App theme:"),
             Select(options=self.app_themes, value=self.current_app_theme,
-                   prompt="Select an app theme",
                    tooltip="Select a theme to apply to the app",
                    id="app-theme-picker", ),
+            Label("Editor theme:"),
             Select(options=self.editor_themes, value=self.current_editor_theme,
-                   prompt="Select an editor theme",
                    tooltip="Select a theme to apply to the editor",
                    id="editor-theme-picker", ),
+            Label("File language:"),
             Select(options=self.languages, value="python",
-                   prompt="Select a language",
                    tooltip="Select a programming language for the active tab",
                    id="language-picker", ), )
 

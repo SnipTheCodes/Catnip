@@ -23,7 +23,7 @@ setup_ollama() {
             jq '.llm_on_start = false' "$CONFIG_FILE" > temp.json && mv temp.json "$CONFIG_FILE"
         fi
 
-        # install Ollama and pull llama3 model
+        # install Ollama and pull qwen3:8b model
         echo "Setting up Ollama for LLM support..."
         if [[ "$OS" == "Darwin" ]]; then
             if command_exists brew; then
@@ -50,8 +50,8 @@ setup_ollama() {
         fi
 
         if command_exists ollama; then
-            echo "Pulling llama3 model for Ollama..."
-            ollama pull llama3
+            echo "Pulling qwen3:8b model for Ollama..."
+            ollama pull qwen3:8b
             pkill -9 -f "Ollama" 2>/dev/null || true
         fi
 }

@@ -65,7 +65,9 @@ class LayoutController:
         tabbed_editor = self.app.query_one(".tabbed-editor")
 
         if not side_panel.display:
-            tabbed_editor.styles.width = "100%"
+            # Keep the icon rail visible and let the editor fill only the
+            # horizontal space that remains after it.
+            tabbed_editor.styles.width = "1fr"
             return
 
         side_panel_width = get_side_panel_width(

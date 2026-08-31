@@ -17,10 +17,10 @@ class SideBar(Container):
 
         yield Container(Button("📦", id="file-browser",
                                tooltip="Show directory tree panel (Ctrl+1)"),
-                        Button("🐳", id="customizer",
+                        Button("⚙️ ", id="customizer",
                                tooltip="Show customizer panel (Ctrl+2)"),
                         Button("▶️", id="runner", tooltip="Runner (Ctrl+3)"),
-                        Button("🧶", id="key-mapping",
+                        Button("🍀", id="key-mapping",
                                tooltip="Show key mappings (Ctrl+4)"),
                         Button("🐱", id="cat-me",
                                tooltip="Cat me (Ctrl+Shift+C)"),

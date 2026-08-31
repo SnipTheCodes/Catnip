@@ -66,11 +66,19 @@ Button {
     text-align: left;
 }
 
+SideBar {
+    width: 4;
+}
+
 #side-panel {
     width: auto;
     padding-left: 1;
     text-align: center;
     align: right middle;
+}
+
+#customizer Label {
+    margin: 1;
 }
 
 #runner-output {
